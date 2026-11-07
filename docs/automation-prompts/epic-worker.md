@@ -1,6 +1,6 @@
 # Epic worker kickoff
 
-Use the repository custom agent defined in
+Use the repository custom agent **💾 95 Developer** defined in
 `.github/agents/epic-developer.agent.md`.
 
 Complete and merge at most one eligible direct native child task of Epic:
