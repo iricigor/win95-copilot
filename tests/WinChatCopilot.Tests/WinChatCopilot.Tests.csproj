@@ -23,6 +23,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\WinChatCopilot\WinChatCopilot.csproj" />
+    <ProjectReference Include="..\WinChatCopilot.FakeCli\WinChatCopilot.FakeCli.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopyFakeCli" AfterTargets="Build">
+    <ItemGroup>
+      <FakeCliFiles Include="$(MSBuildThisFileDirectory)..\WinChatCopilot.FakeCli\bin\$(Configuration)\net10.0\WinChatCopilot.FakeCli.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FakeCliFiles)" DestinationFolder="$(TargetDir)Fake CLI" />
+  </Target>
 
 </Project>
