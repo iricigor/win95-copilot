@@ -1,15 +1,15 @@
 # win95-copilot
 
-## Standalone Epic Developer
+## Standalone 💾 95 Developer
 
-The repository's [Epic Developer](.github/agents/epic-developer.agent.md) follows
+The repository's [💾 95 Developer](.github/agents/epic-developer.agent.md) follows
 the standalone worker model: each authorized run delivers at most one eligible
 native child of [Epic #1](https://github.com/iricigor/win95-copilot/issues/1),
 including implementation, validation, repair, and a verified merge to `main`.
 It does not need a Dispatcher. No child tasks means the run stops without changes;
 the worker does not create a breakdown or implement the entire Epic.
 
-Select **Epic Developer** in a fresh isolated worktree and use this kickoff:
+Select **💾 95 Developer** in a fresh isolated worktree and use this kickoff:
 
 ```text
 Read docs\automation-prompts\epic-worker.md and execute its instructions.
