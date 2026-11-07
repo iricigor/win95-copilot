@@ -1,9 +1,12 @@
 # Real Copilot CLI contract investigation
 
-**Status: incomplete feasibility gate for Epic #1 / task #4.** Real subprocess
-access, text-only streaming, session identities, and local cancellation were
-observed. This is not a production adapter, an end-to-end application pass, or
-permission to treat the outstanding stall/error guarantees as implemented.
+**Status: verified contract within the user-agreed scope of task #4.** Real
+subprocess access, text-only streaming, session identities, and local
+cancellation were observed. On 2026-11-07, the user explicitly deferred the
+stall/timeout policy and real authentication/mid-stream failure verification
+as consciously not done, for potential improvements on Epic #1. They are not
+blockers for #4 and are not claimed as implemented or passed. This is not a
+production adapter or an end-to-end application pass.
 
 ## Verified executable and sources
 
@@ -67,7 +70,7 @@ owned CLI processes have exited. Output contains summarized synthetic session
 IDs, timings, exit codes, and verification counts, not raw model context,
 credentials, prompts, or existing user transcripts. Do not run this in routine
 CI. A successful script run verifies its listed scenarios, **not every Epic
-acceptance criterion**.
+acceptance criterion or the consciously deferred improvements**.
 
 ## Invocation and text-only enforcement
 
@@ -130,7 +133,7 @@ These measurements are workload-specific evidence, not a service latency SLA.
 The repeatable script also checks multiline Unicode text and argument failures;
 its final run metrics are reported on task #4.
 
-## Cancellation, failures, authentication, and remaining gates
+## Cancellation, failures, authentication, and conscious deferrals
 
 The procedure cancels after receiving a delta using `Process.Kill(true)` on its
 owned process handle and waits at most ten seconds for local exit. Partial
@@ -153,8 +156,8 @@ service connectivity. The CLI's own login flow manages credentials; the app must
 not collect them. `gh api user` success alone is not a Copilot readiness check.
 Real inference here succeeded using existing local authentication.
 
-**Authentication-failure evidence remains unavailable in this shared signed-in
-environment.** A synthetically invalid environment token, including an
+**Real authentication/mid-stream failure verification is consciously not done
+for #4, by user decision.** A synthetically invalid environment token, including an
 OAuth-shaped all-zero token, still returned a successful real response. It was
 not a reliable signed-out fixture and is not reported as an auth-rejection pass.
 Changing or deleting the user's saved credentials to force failure is out of
@@ -162,7 +165,8 @@ scope. The smoke procedure instead reports genuine failures if encountered.
 Authenticated failure handling and session usability after a mid-stream service
 failure remain unverified; the argument-error test does not substitute for them.
 
-**A production stall/timeout policy remains unresolved.** Inspected help and
+**A production stall/timeout policy is consciously not done for #4, by user
+decision.** Inspected help and
 references provide neither a response heartbeat nor a guaranteed inactivity/
 request latency bound. Text deltas show progress, but a quiet period cannot
 distinguish slow inference from a stalled request. Short successful runs do not
@@ -171,10 +175,12 @@ safety bound and ten-second local cleanup bound protect the test runner only:
 they are not proposed application timeout defaults. If exceeded, the test
 explicitly fails, kills only owned work, and does not retry.
 
-Task #4 must remain open until a supported stall/error contract is evidenced or
-an explicit product policy resolves the missing guarantee. Recovery requires
-supported CLI/service timeout evidence or a human-agreed inactivity policy,
-plus an authorized isolated failure fixture if real auth/mid-stream failure
-behavior is required. Fake-CLI tests in #6 may exercise application timeout
-logic, but cannot prove real Copilot service behavior. No broader provider,
-production adapter, credential reset, or arbitrary default is introduced here.
+These two gaps are deliberately deferred potential improvements, not failed
+checks to relabel as passes and not blockers for completing #4. The user-directed
+decision is recorded in Epic #1. A future improvement may establish an
+application inactivity policy and safely reproduce genuine service/auth failures,
+including session behavior afterward; no provider SLA is required merely to
+define an application policy. Do not reset working saved credentials to obtain
+that evidence. Fake-CLI tests in #6 may exercise application timeout logic, but
+cannot prove real Copilot service behavior. No broader provider, production
+adapter, credential reset, or arbitrary application default is introduced here.

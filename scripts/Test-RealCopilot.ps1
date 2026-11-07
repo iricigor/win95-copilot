@@ -257,7 +257,7 @@ try {
     if (-not $after.Content.Contains($tokenText)) { throw 'Same-session continuation after forced cancellation failed.' }
     $results.Add($after)
     [pscustomobject]@{
-        Outcome = 'Verified real streaming, multiline/Unicode text, session continuity/reset, zero exposed tools, argument-error diagnostics, and owned-process cancellation/continuation; see the contract document for outstanding gates'
+        Outcome = 'Verified real streaming, multiline/Unicode text, session continuity/reset, zero exposed tools, argument-error diagnostics, and owned-process cancellation/continuation; consciously deferred improvements are documented separately'
         CliVersion = $version[0]
         ExecutableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
         Account = $account

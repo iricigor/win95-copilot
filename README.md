@@ -65,10 +65,11 @@ Change the property rather than adding a separate UI version constant.
 
 The [Copilot CLI contract investigation](docs/copilot-cli-contract.md) records
 real streaming/session/text-only/cancellation evidence for the tested bundled
-CLI and its outstanding stall/error verification gates. The application scaffold
+CLI and consciously deferred stall/error improvements agreed on Epic #1. The application scaffold
 does not yet integrate Copilot. `scripts\Test-RealCopilot.ps1` requires an explicit
 real-service opt-in and existing local authentication; it is not a routine CI
-test and a passing smoke run does not close the outstanding feasibility gates.
+test; a passing smoke run does not claim the deferred improvements or the full
+application are implemented.
 
 ## Standalone 💾 95 Developer
 
