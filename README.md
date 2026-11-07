@@ -46,8 +46,8 @@ should exit. This is the minimal manual launch/close check, not the future
 Windows 3.1 appearance checklist. Do not automate a user's working desktop.
 The scaffold tests load window resources on a dedicated STA thread without
 showing a window and verify the displayed version against generated metadata.
-No CI or fake-CLI harness is installed by this bootstrap; Epic child #6 owns
-those validation mechanisms.
+The deterministic fake-CLI suite and Windows CI are described below. Neither
+requires Copilot installation, authentication, or service access.
 
 ### Project layout and version
 
@@ -60,6 +60,72 @@ separate speculative service architecture.
 MSBuild generates assembly/file/informational metadata from it; the window uses
 that metadata through `ApplicationInfo.Version` (without a source-commit suffix).
 Change the property rather than adding a separate UI version constant.
+
+## Deterministic process tests and Windows CI
+
+The same restore/build/test commands above run scaffold checks and the
+`ProcessTransportTests` suite. The solution builds the small
+`tests\WinChatCopilot.FakeCli` console executable and copies its apphost/runtime
+files into the test output's `Fake CLI` directory (intentionally containing a
+space). Tests launch that actual executable through production
+`src\WinChatCopilot\Processes\ProcessTransport.cs`, never a mocked transport,
+shell, or real `copilot.exe`. Fixtures use synthetic prompts/session IDs and
+unique temporary working directories; helper PATH is empty and credential
+environment variables are removed.
+
+The transport uses `ArgumentList`, closed stdin and independently drained,
+strict UTF-8 stdout/stderr. Callbacks receive raw character chunks, not lines;
+concatenation preserves multiline/Unicode text even when UTF-8 bytes arrive
+separately. Callbacks on the two streams can overlap and must not block or
+assume cross-stream ordering. Nonzero OS exit codes are returned explicitly;
+launch, encoding, callback and cleanup errors propagate. Caller cancellation
+throws only after owned work settles, preserving chunks already delivered.
+Terminal escape sequences are deliberately still raw here: the later CLI
+adapter owns response framing, diagnostic filtering and terminal sanitization,
+and must reuse this exercised transport rather than create another one.
+
+Scenarios cover gated progressive output without newline boundaries, split
+UTF-8/multiline output, stdout/stderr and terminal formatting separation,
+stderr backpressure, clean/nonzero/partial-failure exits, silent stalls, cancellation before/after
+output, an owned child and an unrelated sentinel, invalid encoding and failed
+consumers. Argument/session assertions round-trip quotes, metacharacters,
+newlines, Unicode, empty arguments and trailing backslashes. Deliberately
+incorrect session/prompt scenarios demonstrate that these assertions fail.
+These are synthetic transport tests, **not real Copilot compatibility,
+authentication, persisted session history, or UI behavior evidence**.
+
+Each fixture has a 30-second test safety bound, readiness gates have ten-second
+bounds, and cancellation/process-tree exit has a ten-second cleanup bound.
+Tests explicitly await termination and check owned parent/child handles while
+an unrelated sentinel remains alive. Stalled helpers also self-expire after
+30 seconds in their stall, with separate ten-second readiness gates;
+fixture teardown cancels pending work and deletes only its
+unique temporary directory. These are runner/cleanup bounds, **not a production
+inference timeout policy**. Tree termination uses .NET's owned process handle
+while the parent is alive; detached/reparented children are not a guaranteed
+supported backend contract. Do not use process-name kills.
+
+`.github\workflows\windows-tests.yml` runs these commands for PRs and `main`
+pushes on `windows-latest` with .NET 10, read-only repository permissions, a
+ten-minute job bound, and two-minute test-host hang diagnostics. The test step
+removes Copilot from PATH and fails if it is still discoverable. Results are
+uploaded even on failure. It never calls the opt-in real smoke script or passes
+Copilot credentials. To reproduce that extra absence/hang check locally in a
+fresh PowerShell process after restore/build:
+
+```powershell
+$dotnet = (Get-Command dotnet.exe -CommandType Application | Select-Object -First 1).Source
+$env:PATH = "$(Split-Path $dotnet);$env:SystemRoot\System32;$env:SystemRoot"
+if (Get-Command copilot.exe -ErrorAction SilentlyContinue) { throw 'Copilot is still on PATH.' }
+& $dotnet test .\WinChatCopilot.sln --configuration Release --no-build --no-restore --logger trx --results-directory .\TestResults --blame-hang --blame-hang-timeout 2m
+```
+
+Later features add focused application tests and extend this executable with
+explicit synthetic scenarios (and negative assertions) as needed. Keep
+filesystem fixtures isolated, release output gates or cancel in teardown, and
+assert exact output/state rather than assuming successful process exit is
+feature acceptance. Visual/desktop checks remain manual; real-Copilot tests
+remain separately opt-in and report missing prerequisites as unavailable.
 
 ## Opt-in real CLI investigation
 

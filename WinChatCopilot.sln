@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{39D8A404
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinChatCopilot.Tests", "tests\WinChatCopilot.Tests\WinChatCopilot.Tests.csproj", "{281540C5-17DD-4D28-9165-D4ADBF1690E1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinChatCopilot.FakeCli", "tests\WinChatCopilot.FakeCli\WinChatCopilot.FakeCli.csproj", "{7F120A6B-4511-4224-8FEC-E0F67A4AA6B8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{281540C5-17DD-4D28-9165-D4ADBF1690E1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{281540C5-17DD-4D28-9165-D4ADBF1690E1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{281540C5-17DD-4D28-9165-D4ADBF1690E1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F120A6B-4511-4224-8FEC-E0F67A4AA6B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F120A6B-4511-4224-8FEC-E0F67A4AA6B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F120A6B-4511-4224-8FEC-E0F67A4AA6B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F120A6B-4511-4224-8FEC-E0F67A4AA6B8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{CA5C12B4-DDC0-4C18-8861-EC99E09E692E} = {98E9E0BE-3197-463A-B135-B41A294DB745}
 		{281540C5-17DD-4D28-9165-D4ADBF1690E1} = {39D8A404-1F5C-4865-815E-BF03D5E253E4}
+		{7F120A6B-4511-4224-8FEC-E0F67A4AA6B8} = {39D8A404-1F5C-4865-815E-BF03D5E253E4}
 	EndGlobalSection
 EndGlobal
