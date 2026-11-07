@@ -61,6 +61,16 @@ MSBuild generates assembly/file/informational metadata from it; the window uses
 that metadata through `ApplicationInfo.Version` (without a source-commit suffix).
 Change the property rather than adding a separate UI version constant.
 
+## Opt-in real CLI investigation
+
+The [Copilot CLI contract investigation](docs/copilot-cli-contract.md) records
+real streaming/session/text-only/cancellation evidence for the tested bundled
+CLI and consciously deferred stall/error improvements agreed on Epic #1. The application scaffold
+does not yet integrate Copilot. `scripts\Test-RealCopilot.ps1` requires an explicit
+real-service opt-in and existing local authentication; it is not a routine CI
+test; a passing smoke run does not claim the deferred improvements or the full
+application are implemented.
+
 ## Standalone 💾 95 Developer
 
 The repository's [💾 95 Developer](.github/agents/epic-developer.agent.md) follows
