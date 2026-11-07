@@ -5,9 +5,11 @@
 The bootstrap uses **WPF on .NET 10 LTS**. WPF supplies a lightweight,
 unpackaged Windows executable, XAML controls, and ordinary Windows keyboard and
 window behavior without requiring the Windows App SDK. Its styling and window
-customization support the later Windows 3.1 shell task. The current window is
-only a placeholder with native modern chrome, not a claim of retro fidelity.
-There are no menus, chat features, Copilot processes, or service calls yet.
+customization support the Windows 3.1 shell without Windows App SDK packaging.
+The reference-led [Windows 3.1 shell](docs/windows31-shell.md) supplies menus,
+text areas, action surfaces and a versioned About dialog. Chat features, Copilot
+processes and service calls are not implemented yet; their actions remain
+visibly disabled with a truthful unavailable status.
 
 ### Prerequisites
 
@@ -40,10 +42,10 @@ dotnet test .\WinChatCopilot.sln --configuration Release --no-build --no-restore
 dotnet run --project .\src\WinChatCopilot\WinChatCopilot.csproj --configuration Release --no-build --no-restore
 ```
 
-The run command displays the placeholder window and the application version in
-its title. Close it with the normal window close control or Alt+F4; the process
-should exit. This is the minimal manual launch/close check, not the future
-Windows 3.1 appearance checklist. Do not automate a user's working desktop.
+The run command displays the retro shell and the application version in its
+title. Close it with File > Exit, system-menu Close, or Alt+F4; there is no
+dedicated X button. Follow the [local reference/appearance checklist](docs/windows31-shell.md)
+for actual desktop acceptance. Do not automate a user's working desktop.
 The scaffold tests load window resources on a dedicated STA thread without
 showing a window and verify the displayed version against generated metadata.
 The deterministic fake-CLI suite and Windows CI are described below. Neither
@@ -51,7 +53,8 @@ requires Copilot installation, authentication, or service access.
 
 ### Project layout and version
 
-`src\WinChatCopilot` contains the WPF entry point and placeholder window.
+`src\WinChatCopilot` contains the WPF entry point, shared retro window/control
+resources, shell commands, main window and About dialog.
 `tests\WinChatCopilot.Tests` contains xUnit tests with a reference to the app;
 later tasks can add UI-independent logic and actual subprocess tests without a
 separate speculative service architecture.
