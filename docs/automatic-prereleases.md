@@ -5,6 +5,10 @@ tests on PRs, manual validation and every `main` push, including documentation.
 Process/chat fixture teardown waits at most two seconds for Windows sharing or
 lock violations after owned process exit; persistent locks and other errors
 still fail. Regression tests reproduce both transient and persistent locks.
+The transient-lock fixture releases its owned handle on a dedicated thread, not
+the caller's busy ThreadPool. Direct-tick waiting tests assert the initial state
+before asynchronous layout and then align their cycle after real timer ticks;
+separate live-cadence checks still exercise the unmodified production timer.
 Only a live **push to `refs/heads/main`** can publish. PRs, manual runs, other
 branches and tag events cannot reach the write-capable job. No additional
 credentials, Copilot authentication, stable version bump or manual release run

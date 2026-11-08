@@ -716,6 +716,7 @@ public class ChatTests
             var prompt = input.Text;
             var session = backend.Session;
             var run = window.SendAsync();
+            Assert.Equal(1, window.WaitingDots);
             await WaitAsync(() => File.Exists(Path.Combine(fixture.Work, "chat.empty")) && transcript.VerticalOffset > 0);
             var turn = Assert.Single(window.Turns);
             transcript.ScrollToVerticalOffset(100);
@@ -730,7 +731,11 @@ public class ChatTests
             var document = transcript.Document;
             var assistant = (Paragraph)transcript.Document.Blocks.LastBlock;
             var assistantBody = assistant.Inlines.LastInline;
-            // Direct ticks exercise the entire cycle without depending on OS scheduling.
+            // Layout waits can admit real timer ticks; align the direct-tick cycle afterward.
+            Assert.True(window.IsWaitingForText);
+            Assert.InRange(window.WaitingDots, 1, 5);
+            for (var tick = 0; tick < 5 && window.WaitingDots != 1; tick++)
+                window.AdvanceWaitingIndicator(turn);
             foreach (var dots in new[] { 1, 2, 3, 4, 5, 1, 2 })
             {
                 Assert.Equal(dots, window.WaitingDots);

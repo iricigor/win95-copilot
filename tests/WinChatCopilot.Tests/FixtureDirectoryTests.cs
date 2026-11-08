@@ -6,27 +6,30 @@ namespace WinChatCopilot.Tests;
 public class FixtureDirectoryTests
 {
     [Fact]
-    public async Task CleanupWaitsForTransientWindowsSharingLock()
+    public void CleanupWaitsForTransientWindowsSharingLock()
     {
         var root = Path.Combine(Path.GetTempPath(), "winchat-cleanup-" + Guid.NewGuid());
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "owned-fixture.txt");
-        var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        Assert.Equal(32, Assert.Throws<IOException>(() => Directory.Delete(root, recursive: true)).HResult & 0xffff);
-        var release = Task.Run(async () =>
+        using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        var release = new Thread(() =>
         {
-            await Task.Delay(150);
+            Thread.Sleep(150);
             file.Dispose();
-        });
+        }) { IsBackground = true };
         try
         {
+            Assert.Equal(32, Assert.Throws<IOException>(() => Directory.Delete(root, recursive: true)).HResult & 0xffff);
+            // Cleanup blocks its caller; release must not depend on a spare ThreadPool worker.
+            release.Start();
             FixtureDirectory.Delete(root);
             Assert.False(Directory.Exists(root));
-            await release;
         }
         finally
         {
-            await release;
+            if ((release.ThreadState & System.Threading.ThreadState.Unstarted) == 0)
+                Assert.True(release.Join(TimeSpan.FromSeconds(5)), "Owned fixture release thread did not settle.");
+            file.Dispose();
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
     }
