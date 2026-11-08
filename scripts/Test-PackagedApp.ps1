@@ -32,6 +32,9 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Runtime.InteropServices;
 public static class OwnedDesktop {
+    delegate bool EnumWindowCallback(IntPtr h, IntPtr parameter);
+    [DllImport("user32.dll", SetLastError=true)] static extern bool EnumWindows(EnumWindowCallback callback, IntPtr parameter);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder text, int length);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
@@ -62,6 +65,23 @@ public static class OwnedDesktop {
     public static void Check(IntPtr h, int expected) {
         uint actual; GetWindowThreadProcessId(h, out actual);
         if (actual != expected || actual == 0) throw new InvalidOperationException("Window ownership changed.");
+    }
+    public static bool IsOwned(IntPtr h, int expected) {
+        uint actual; GetWindowThreadProcessId(h, out actual);
+        return actual != 0 && actual == expected;
+    }
+    public static IntPtr[] Windows(int expected, string title) {
+        var windows = new System.Collections.Generic.List<IntPtr>();
+        if (!EnumWindows((h, parameter) => {
+            uint actual; GetWindowThreadProcessId(h, out actual);
+            if (actual == expected) {
+                var text = new System.Text.StringBuilder(512);
+                GetWindowText(h, text, text.Capacity);
+                if (text.ToString() == title) windows.Add(h);
+            }
+            return true;
+        }, IntPtr.Zero)) throw new Win32Exception();
+        return windows.ToArray();
     }
     public static string ProbeDesktop() {
         // A non-input desktop is never switched into: UIA/keyboard input targets the current desktop.
@@ -189,12 +209,24 @@ function By-Name([string] $Name, $Parent = $script:main) {
     return Find-Element $Parent ([Windows.Automation.AutomationElement]::NameProperty) $Name
 }
 function Owned-Window([string] $Name) {
-    $condition = New-Object Windows.Automation.AndCondition(
-        (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ProcessIdProperty, $script:process.Id)),
-        (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, $Name)))
-    $element = [Windows.Automation.AutomationElement]::RootElement.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
-    if ($null -ne $element) { Assert-Owned $element }
-    return $element
+    foreach ($handle in [OwnedDesktop]::Windows($script:process.Id, $Name)) {
+        if (-not [OwnedDesktop]::IsOwned($handle, $script:process.Id)) { continue }
+        # Dismissed modal handles can disappear between enumeration and UIA lookup.
+        try {
+            $element = [Windows.Automation.AutomationElement]::FromHandle($handle)
+            if ($element.Current.ProcessId -ne $script:process.Id) {
+                if (-not [OwnedDesktop]::IsOwned($handle, $script:process.Id)) { continue }
+                throw 'Live window UI Automation ownership does not match its verified process.'
+            }
+        }
+        catch [Windows.Automation.ElementNotAvailableException] {
+            if ([OwnedDesktop]::IsOwned($handle, $script:process.Id)) { throw }
+            continue
+        }
+        Assert-True (-not $script:process.HasExited) 'Test application exited unexpectedly.'
+        return $element
+    }
+    return $null
 }
 function Invoke-Element($Element) {
     Assert-Owned $Element
