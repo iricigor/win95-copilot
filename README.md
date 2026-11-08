@@ -44,8 +44,10 @@ dotnet run --project .\src\WinChatCopilot\WinChatCopilot.csproj --configuration 
 
 The run command displays the retro shell and the application version in its
 title. Close it with File > Exit, system-menu Close, or Alt+F4; there is no
-dedicated X button. Follow the [local reference/appearance checklist](docs/windows31-shell.md)
-for actual desktop acceptance. Do not automate a user's working desktop.
+dedicated X button. The [reference/appearance checklist](docs/windows31-shell.md)
+is optional human review guidance, not a delivery gate. Automate feasible checks
+with synthetic data and isolated settings. Local interactive testing is authorized
+for verified run-owned app windows only; do not interact with unrelated windows.
 The scaffold tests load window resources on a dedicated STA thread without
 showing a window and verify the displayed version against generated metadata.
 The deterministic fake-CLI suite and Windows CI are described below. Neither
@@ -127,8 +129,22 @@ Later features add focused application tests and extend this executable with
 explicit synthetic scenarios (and negative assertions) as needed. Keep
 filesystem fixtures isolated, release output gates or cancel in teardown, and
 assert exact output/state rather than assuming successful process exit is
-feature acceptance. Visual/desktop checks remain manual; real-Copilot tests
-remain separately opt-in and report missing prerequisites as unavailable.
+feature acceptance. Automate feasible visual/desktop checks in isolation;
+real-Copilot tests remain separately opt-in. If access is unavailable or a check
+cannot reasonably be automated, perform bounded best-effort verification and
+record the exact unverified behavior as a non-blocking note on Epic #1. Do not
+count it as a pass or require human sign-off. Actual defects, unsafe behavior and
+applicable required CI/review failures remain blocking.
+
+For this Epic, local automated app testing and bounded harmless real-Copilot
+tests using existing authentication are explicitly authorized. Build the current
+revision, launch a run-owned instance, verify its process/window ownership and
+exercise applicable menus, dialogs, input, window states and end-to-end behavior.
+Use an isolated desktop where functional; if it cannot handle input, test only
+the app's owned windows on the local interactive desktop. Verify CLI access,
+version and authenticated readiness rather than assuming success. Do not request
+routine renewed consent, inspect/change credentials, interact with unrelated
+windows or change real user settings/conversations. Close owned helpers afterward.
 
 ## Opt-in real CLI investigation
 
@@ -168,5 +184,8 @@ human recovery rather than automatic takeover on the next hourly tick.
 
 Each claimed run records task diagnostics and a brief Epic outcome. Merging
 requires acceptance evidence and all applicable current-revision checks/reviews,
-without changing protection, validation, or release settings. Missing permissions
-or evidence leave the task visibly blocked or incomplete.
+without changing protection, validation, or release settings. Missing permissions,
+unsafe behavior and actual failures leave the task visibly blocked or incomplete.
+Unavailable real-service/isolated-desktop evidence or checks that cannot reasonably
+be automated follow the non-blocking best-effort policy above; they do not retain
+the worker claim after otherwise verified delivery and reporting.

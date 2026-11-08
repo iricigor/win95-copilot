@@ -56,13 +56,27 @@ editing; this does not yet enable submission or implement either send shortcut.
 The transcript is read-only. Preference check states are not represented as
 persisted choices before the settings task.
 
-## Reproducible manual local acceptance
+## Automation-first verification and optional local review
 
-Run the README restore/build/test commands, then launch the Release application
-on an authorized local test desktop. Use only synthetic text. Do not automate
-the user's working desktop. These checks require actual local inspection;
-resource/action-state tests and Windows CI are **not visual acceptance**.
-Record OS/scaling/build revision, reference links and each observed result.
+Run the README restore/build/test commands and automate feasible command,
+layout, window-state, dialog and interaction checks using synthetic text and
+isolated settings. Build and launch a run-owned local app instance. Prefer an
+isolated desktop where functional; local interactive testing is authorized for
+verified test-app process IDs/window handles when input cannot work in isolation.
+Use Windows UI Automation/Win32 controls where available, recheck ownership
+before input, and never interact with unrelated windows or real user settings.
+Close owned windows/helpers after testing. Use the steps below as coverage guidance and optional human review,
+not a mandatory manual checklist or sign-off.
+
+Do not classify menus, keyboard or dialogs as unavailable merely because an
+initial non-input desktop probe failed; attempt owned-window local testing first.
+If actual desktop appearance or an interaction cannot reasonably be verified
+automatically, make bounded best-effort checks and save/read back a non-blocking
+note on Epic #1 linking the task/PR/revision, attempts and remaining checks.
+Resource/action-state tests and Windows CI are **not visual acceptance**; never
+label unavailable evidence as passing. Record OS/scaling/build revision and
+reference links where available. Actual defects and failed applicable tests
+remain blockers; missing manual review alone does not block delivery.
 
 1. Compare the active main title with the two linked references: centered white
    title on solid navy, dash system box, down/up triangles, square gray/black
@@ -88,6 +102,7 @@ Record OS/scaling/build revision, reference links and each observed result.
 6. Relaunch independently to check File Exit, system-menu Close, system-box
    double-click and Alt+F4. Each must exit the no-backend process normally.
 
-Record failures as blockers rather than checking off appearance from XAML.
+Record actual failures as blockers rather than checking off appearance from XAML.
+Record unavailable visual/interaction evidence as non-blocking Epic limitations.
 Later tasks own generation cleanup, actual Edit menu behavior, preference
 persistence, streaming, backend discovery and the assembled product checklist.

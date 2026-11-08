@@ -113,6 +113,45 @@ claim and any PR; do not silently release ownership or pick another task.
 
 ## 4. Implement and validate the same PR
 
+Verification is automation-first under Epic #1's user-approved policy. Automate
+logic, subprocess, command, UI-state, dialog and packaged-app checks where
+feasible, using synthetic fixtures and an isolated authorized test environment.
+Use existing test infrastructure before adding a bounded helper; do not require
+a large desktop automation framework or a human checklist/sign-off.
+
+Local application testing is explicitly user-authorized for this Epic. Build
+the current revision, launch a run-owned app instance on this Windows PC, and
+exercise its menus, dialogs, keyboard/input, window states and applicable
+end-to-end behavior with available Windows UI Automation/Win32 controls. Prefer
+an isolated test desktop where functional, but do not stop at a non-input desktop
+if it cannot exercise popups or keyboard interaction: the local interactive
+desktop is authorized for the test application's own windows only. Identify
+windows by verified owned process IDs/handles, not title or screen coordinates
+alone. Verify ownership before sending input; do not interact with other apps.
+
+Use synthetic prompts/transcripts and isolated application settings/output paths.
+Existing Copilot authentication on this PC and bounded harmless real-service
+tests are explicitly authorized; verify actual executable/version, subprocess
+access and authenticated readiness, then run applicable real-Copilot checks
+automatically. Do not request renewed permission unless account, environment,
+data exposure, permissions or testing scope materially changes. Do not install,
+update or log into Copilot, inspect credentials or alter saved authentication.
+Close owned test windows and settle only run-owned processes after checks.
+
+Missing real-service or local-desktop access after an actual bounded attempt,
+or an interaction/visual check that cannot reasonably be
+automated, is a non-blocking verification limitation, not a mandatory guarantee
+of success. Make a bounded best-effort check, distinguish actual passes from
+unverified behavior, and save/read back a non-blocking Epic note with the task,
+PR/revision, attempted evidence, limitation and remaining check before delivery.
+Do not request human testing or retain a claim solely for these limitations.
+Never count fake tests as real evidence or resource renders as visual acceptance.
+
+Actual implementation/test failures, missing source or reference inputs required
+to implement the task, unsafe or incompatible behavior, permissions, ownership,
+and applicable required CI/reviews remain blockers. Do not weaken checks, invent
+evidence, obtain credentials, or automate unrelated desktop windows to proceed.
+
 Read enough code to follow existing patterns and reuse helpers. Preserve intended
 behavior, saved-data compatibility, type safety, and truthful error handling.
 Record consequential assumptions, decisions, and meaningful checkpoints on the
@@ -123,9 +162,10 @@ tests, and linters. If the task establishes the first tooling, implement only
 the tooling required by that task; do not claim nonexistent checks passed.
 For documentation-only tasks, use documentation validation if it exists.
 
-Use synthetic data and isolated validation. Never automate the user's working
-desktop, modify real user settings/conversations, or terminate unrelated
-processes. Only application-owned processes may be cleaned up by specific ID.
+Use synthetic data and isolated validation. Local interactive app-window testing
+is permitted as described above; never automate unrelated windows, modify real
+user settings/conversations, or terminate unrelated processes. Only
+application-owned processes may be cleaned up by specific ID.
 Read relevant GitHub image attachments before implementing visual requirements;
 if unavailable, report the missing evidence instead of guessing.
 
@@ -142,15 +182,16 @@ Missing, stale, cancelled, failed, pending, or improperly skipped applicable
 checks are not success. No configured CI means report that limitation and
 provide appropriate task acceptance/local evidence, not an invented CI pass.
 
-If unrelated failures, unavailable evidence, or permissions block delivery,
+If unrelated failures, required blocking evidence, or permissions block delivery,
 keep or restore the WIP draft and retain ownership. Add status:blocked only if
 the label exists. Report the blocker and exact recovery action. If stopping
 while CI is pending, report incomplete delivery, not success.
 
 ## 5. Merge and verify delivery
 
-Only after acceptance criteria and applicable final-revision checks/reviews
-pass, update the PR with scope, evidence, decisions, and limitations. Remove
+Only after implementation acceptance criteria and applicable final-revision
+checks/reviews pass, with any permitted verification limitations recorded under
+the policy above, update the PR with scope, evidence, decisions, and limitations. Remove
 WIP, mark ready, and use status:review instead of active if those labels exist.
 The PR and claim still consume capacity.
 
