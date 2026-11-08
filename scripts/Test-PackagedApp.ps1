@@ -304,12 +304,12 @@ function Assert-RoleColors([string] $UserName = 'User') {
         $heading = $remaining.FindText($names[$index] + ':', $false, $false)
         Assert-True ($null -ne $heading) "Role heading $index was not available."
         $name = $heading.Clone()
-        [void]$name.MoveEndpointByUnit([Windows.Automation.TextPatternRangeEndpoint]::End, [Windows.Automation.TextUnit]::Character, -1)
+        [void]$name.MoveEndpointByUnit([Windows.Automation.Text.TextPatternRangeEndpoint]::End, [Windows.Automation.Text.TextUnit]::Character, -1)
         Assert-True ($name.GetAttributeValue([Windows.Automation.TextPattern]::ForegroundColorAttribute) -eq $colors[$index]) "Role $index did not use its exact name color."
         $colon = $heading.Clone()
-        [void]$colon.MoveEndpointByUnit([Windows.Automation.TextPatternRangeEndpoint]::Start, [Windows.Automation.TextUnit]::Character, $names[$index].Length)
+        [void]$colon.MoveEndpointByUnit([Windows.Automation.Text.TextPatternRangeEndpoint]::Start, [Windows.Automation.Text.TextUnit]::Character, $names[$index].Length)
         Assert-True ($colon.GetAttributeValue([Windows.Automation.TextPattern]::ForegroundColorAttribute) -eq $plain) "Role $index colored its colon."
-        $remaining.MoveEndpointByRange([Windows.Automation.TextPatternRangeEndpoint]::Start, $heading, [Windows.Automation.TextPatternRangeEndpoint]::End)
+        $remaining.MoveEndpointByRange([Windows.Automation.Text.TextPatternRangeEndpoint]::Start, $heading, [Windows.Automation.Text.TextPatternRangeEndpoint]::End)
     }
 }
 function Record([string] $Name) { $results.Add([pscustomobject]@{ Check = $Name; Outcome = 'Passed'; Utc = [DateTime]::UtcNow.ToString('o') }) }
