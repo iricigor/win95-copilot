@@ -101,13 +101,14 @@ public class ChatTests
         using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var backend = fixture.Controller();
         await backend.ConnectAsync(bound.Token);
+        var session = backend.Session;
         var text = new StringBuilder();
         var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
             backend.SendAsync("synthetic", chunk => text.Append(chunk), bound.Token));
         Assert.False(string.IsNullOrWhiteSpace(error.Message));
         Assert.DoesNotContain('\u001b', error.Message);
         Assert.Equal(BackendState.Failed, backend.State);
-        Assert.Null(backend.Session);
+        Assert.Same(session, backend.Session);
         Assert.False(backend.IsBusy);
         if (scenario == "partial-failure") Assert.Equal(CleanResponse, text.ToString());
         if (scenario == "pre-failure") Assert.Empty(text.ToString());
@@ -171,7 +172,7 @@ public class ChatTests
             Assert.False(ShellCommands.Send.CanExecute(null, window));
             Assert.False(ShellCommands.Connect.CanExecute(null, window));
             Assert.False(ShellCommands.ConfigureBackend.CanExecute(null, window));
-            Assert.False(ShellCommands.Stop.CanExecute(null, window));
+            Assert.True(ShellCommands.Stop.CanExecute(null, window));
             Assert.True(ShellCommands.About.CanExecute(null, window));
             Assert.Contains("generating", ((TextBlock)window.FindName("BackendStatus")).Text);
             var ticked = false;
@@ -312,6 +313,204 @@ public class ChatTests
             Assert.Equal(clean, filter.Append(raw[..split]) + filter.Append(raw[split..]));
         }
     }
+
+    [Theory]
+    [InlineData("silent-stall", "")]
+    [InlineData("stream", "first ")]
+    [InlineData("stall", "first ")]
+    public async Task StopSettlesBeforeAnotherSendAndRetainsSessionWithoutRetry(string scenario, string expected)
+    {
+        using var fixture = new Fixture(scenario);
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var backend = fixture.Controller();
+        await backend.ConnectAsync(bound.Token);
+        var session = backend.Session;
+        var text = new StringBuilder();
+        var run = backend.SendAsync("synthetic cancellation", chunk => text.Append(chunk), bound.Token);
+        try
+        {
+            await WaitAsync(() => File.Exists(Path.Combine(fixture.Work, "chat.started")) && text.Length >= expected.Length);
+            using var owned = Process.GetProcessById(int.Parse(File.ReadAllText(Path.Combine(fixture.Work, "chat.started"))));
+            backend.CancelGeneration();
+            Assert.Equal(BackendState.Cancelling, backend.State);
+            Assert.True(backend.IsBusy);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => backend.SendAsync("duplicate", _ => { }, bound.Token));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => backend.ConnectAsync(bound.Token));
+            Assert.Throws<InvalidOperationException>(() => backend.Save(new AppSettings()));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.True(owned.HasExited);
+            Assert.Equal(expected, text.ToString());
+            Assert.Equal(BackendState.Ready, backend.State);
+            Assert.Same(session, backend.Session);
+            Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
+            File.WriteAllText(Path.Combine(fixture.Work, "chat-scenario"), "complete");
+            Assert.Equal(CleanResponse, await backend.SendAsync("explicit follow-up, not retry", _ => { }, bound.Token));
+            var requests = File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl"))
+                .Select(line => JsonSerializer.Deserialize<string[]>(line)!).ToArray();
+            Assert.Equal(2, requests.Length);
+            Assert.All(requests, args => Assert.Contains("--session-id=" + session!.Id, args));
+            Assert.Equal("explicit follow-up, not retry", requests[1][^1]);
+        }
+        finally
+        {
+            await bound.CancelAsync();
+            try { await run; }
+            catch (OperationCanceledException) when (bound.IsCancellationRequested) { }
+        }
+    }
+
+    [Theory]
+    [InlineData("auth")]
+    [InlineData("partial-failure")]
+    [InlineData("nonzero")]
+    public async Task ExplicitRecoveryVerifiesSameSessionAndDoesNotResubmitFailedPrompt(string scenario)
+    {
+        using var fixture = new Fixture(scenario);
+        File.WriteAllText(Path.Combine(fixture.Work, "chat.continue"), "");
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var backend = fixture.Controller();
+        await backend.ConnectAsync(bound.Token);
+        var id = backend.Session!.Id;
+        await Assert.ThrowsAsync<InvalidDataException>(() => backend.SendAsync("accepted synthetic prompt", _ => { }, bound.Token));
+        Assert.Equal(BackendState.Failed, backend.State);
+        Assert.Equal(id, backend.Session!.Id);
+        File.WriteAllText(Path.Combine(fixture.Work, "readiness-scenario"), "auth");
+        await Assert.ThrowsAsync<InvalidDataException>(() => backend.ConnectAsync(bound.Token));
+        Assert.Equal(BackendState.Failed, backend.State);
+        Assert.Equal(id, backend.Session!.Id);
+        Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
+        File.WriteAllText(Path.Combine(fixture.Work, "readiness-scenario"), "ready");
+        await backend.ConnectAsync(bound.Token);
+        Assert.Equal(BackendState.Ready, backend.State);
+        Assert.Equal(id, backend.Session!.Id);
+        var check = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(fixture.Work, "readiness.arguments.json")))!;
+        Assert.Contains("--session-id=" + id, check);
+        Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
+        File.WriteAllText(Path.Combine(fixture.Work, "chat-scenario"), "complete");
+        await backend.SendAsync("new explicit prompt", _ => { }, bound.Token);
+        Assert.Equal(2, File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")).Length);
+    }
+
+    [Fact]
+    public async Task RecoveryCannotReplaceIdentityOrChangeBackendWithoutExplicitReset()
+    {
+        using var fixture = new Fixture("complete");
+        var store = new SettingsStore(Path.Combine(fixture.Root, "settings.json"));
+        store.Save(new AppSettings { ExecutablePath = fixture.Session.ExecutablePath });
+        var backend = new BackendController(store, new BackendDiscovery("", []),
+            (_, _) => Task.FromResult(fixture.Session),
+            (session, _) => Task.FromResult(session with { Id = Guid.NewGuid() }));
+        backend.Load();
+        await backend.ConnectAsync(CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => backend.ConnectAsync(CancellationToken.None));
+        Assert.Equal(BackendState.Failed, backend.State);
+        Assert.Same(fixture.Session, backend.Session);
+        Assert.Throws<InvalidOperationException>(() => backend.Save(backend.Settings with { ExecutablePath = null }));
+        Assert.Equal(fixture.Session.ExecutablePath, store.Load().ExecutablePath);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var ready = fixture.Controller();
+        await ready.ConnectAsync(CancellationToken.None);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ready.SendAsync("pre-cancelled", _ => throw new InvalidOperationException("No callback expected."), cancelled.Token));
+        Assert.False(File.Exists(Path.Combine(fixture.Work, "chat.started")));
+        Assert.False(ready.IsBusy);
+    }
+
+    [Fact]
+    public void StopCommandPreservesPartialTurnAndInputThenIgnoresRetiredUpdates() => OnSta(async () =>
+    {
+        using var fixture = new Fixture("stream");
+        var backend = fixture.Controller();
+        var window = new MainWindow(backend);
+        try
+        {
+            await window.InitializeBackendAsync();
+            await backend.ConnectAsync(CancellationToken.None);
+            var input = (TextBox)window.FindName("PromptInput");
+            var transcript = (TextBox)window.FindName("Transcript");
+            input.Text = "synthetic cancelled input";
+            var run = window.SendAsync();
+            await WaitAsync(() => window.Turns[0].Response.Length != 0);
+            Assert.True(ShellCommands.Stop.CanExecute(null, window));
+            ShellCommands.Stop.Execute(null, window);
+            Assert.False(ShellCommands.Stop.CanExecute(null, window));
+            Assert.False(ShellCommands.Send.CanExecute(null, window));
+            Assert.Contains("Cancelling", ((TextBlock)window.FindName("BackendStatus")).Text);
+            await run;
+            var old = Assert.Single(window.Turns);
+            Assert.Equal(ResponseState.Cancelled, old.State);
+            Assert.Equal("first ", old.Response);
+            Assert.NotNull(old.FinishedAt);
+            Assert.Contains("[Cancelled]", transcript.Text);
+            Assert.Equal("synthetic cancelled input", input.Text);
+            Assert.False(input.IsReadOnly);
+            Assert.Contains("Same session retained", ((TextBlock)window.FindName("BackendStatus")).Text);
+            File.WriteAllText(Path.Combine(fixture.Work, "chat-scenario"), "complete");
+            input.Text = "different explicit prompt";
+            await window.SendAsync();
+            var snapshot = transcript.Text;
+            await Task.Delay(100);
+            Assert.Equal(snapshot, transcript.Text);
+            Assert.Equal("first ", old.Response);
+            Assert.Equal(CleanResponse, window.Turns[1].Response);
+            Assert.Equal(ResponseState.Completed, window.Turns[1].State);
+            Assert.Equal(2, File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")).Length);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData("file")]
+    [InlineData("system")]
+    [InlineData("window")]
+    public void EveryClosingPathRejectsReentryAndSettlesOwnedChildNotSentinel(string path) => OnSta(async () =>
+    {
+        using var fixture = new Fixture("with-child");
+        using var sentinelFixture = new Fixture("complete");
+        using var sentinel = Process.Start(new ProcessStartInfo(sentinelFixture.Session.ExecutablePath)
+        {
+            ArgumentList = { "sentinel" }, WorkingDirectory = sentinelFixture.Work, UseShellExecute = false, CreateNoWindow = true
+        })!;
+        var backend = fixture.Controller();
+        var window = new MainWindow(backend);
+        var closed = false;
+        window.Closed += (_, _) => closed = true;
+        try
+        {
+            await window.InitializeBackendAsync();
+            await backend.ConnectAsync(CancellationToken.None);
+            ((TextBox)window.FindName("PromptInput")).Text = "synthetic owned shutdown";
+            var run = window.SendAsync();
+            await WaitAsync(() => window.Turns[0].Response.Length != 0);
+            using var parent = Process.GetProcessById(int.Parse(File.ReadAllText(Path.Combine(fixture.Work, "chat.started"))));
+            using var child = Process.GetProcessById(int.Parse(File.ReadAllText(Path.Combine(fixture.Work, "child.pid"))));
+            if (path == "file")
+            {
+                var exit = (MenuItem)((MenuItem)((Menu)window.FindName("MainMenu")).Items[0]).Items[3];
+                ((System.Windows.Input.RoutedCommand)exit.Command).Execute(null, exit.CommandTarget);
+            }
+            else if (path == "system") SystemCommands.CloseWindowCommand.Execute(null, window);
+            else window.Close();
+            window.Close();
+            Assert.False(closed);
+            Assert.False(ShellCommands.Send.CanExecute(null, window));
+            await run;
+            await WaitAsync(() => closed);
+            await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(parent.HasExited);
+            Assert.True(child.HasExited);
+            Assert.False(sentinel.HasExited);
+            Assert.Equal(ResponseState.Cancelled, Assert.Single(window.Turns).State);
+            Assert.Contains("[Cancelled]", ((TextBox)window.FindName("Transcript")).Text);
+        }
+        finally
+        {
+            if (!closed) { window.Close(); await WaitAsync(() => closed); }
+            if (!sentinel.HasExited) sentinel.Kill(entireProcessTree: true);
+            await sentinel.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    });
 
     private static async Task WaitAsync(Func<bool> condition)
     {

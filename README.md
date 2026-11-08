@@ -10,7 +10,7 @@ The reference-led [Windows 3.1 shell](docs/windows31-shell.md) supplies menus,
 text areas, action surfaces and a versioned About dialog. Backend discovery,
 configuration, preference persistence and authenticated text-only readiness
 are implemented. SEND now streams a text-only chat turn into the transcript.
-Stop, keyboard send modes, export and transcript controls remain visibly
+Keyboard send modes, export and transcript controls remain visibly
 disabled until their respective tasks.
 
 ### Prerequisites
@@ -83,7 +83,11 @@ same check at startup. Readiness requires a successful service response, matchin
 new session identity and zero-tool evidence, not just installation or `gh` login.
 It does not imply permanent connectivity. SEND is enabled only while ready
 with non-whitespace input and no request running.
-Each explicit reconnect prepares a fresh session; no automatic retry occurs.
+Initial Connect prepares a session. Once a session exists, explicit Connect
+checks the same identity without retrying the user's prompt or silently
+discarding context. A failed recovery remains unavailable with an actionable
+error. Changing executables after connecting is rejected with restart guidance;
+Clear Window/new-session controls remain #12. No automatic retry occurs.
 Closing during preparation cancels and settles only the owned subprocess.
 
 The CLI uses app-isolated `cli` and `work` directories beside settings so
@@ -190,10 +194,33 @@ supported without duplicating it. Events, raw response text and stderr each have
 a 1 MiB safety bound; this limits memory, not request duration or provider latency.
 The shared readiness/request builder retains all verified text-only restrictions.
 
-Stop remains explicitly disabled until #10; Exit cancels and settles the newly
-owned request before closing. Keyboard send shortcuts, Edit/wrap/timestamps and
+Stop cancels the owned request, displays Cancelling and disables submission and
+settings until work settles. Partial output and the original input remain,
+with a visible `[Cancelled]` marker and a reminder to review input before any
+explicit next SEND. The same backend session remains usable under the verified
+bundled-CLI cancellation contract; local termination does not guarantee remote
+work/billing stops or all partial history is persisted. A failed turn retains
+its session identity but requires explicit Connect to verify recovery. Neither
+Stop nor Connect automatically resubmits an accepted prompt.
+
+File Exit, system-menu close, Alt+F4 and window closing share one lifecycle path.
+Repeated close requests cannot bypass settlement. Active request identities
+guard backend callbacks and queued UI updates so retired requests cannot mutate
+later turns or a closed window. Existing owned process-tree transport and its
+ten-second cleanup safety bound are reused; no unrelated Copilot process is
+terminated. The consciously deferred production stall/watchdog policy is
+unchanged: a silent request remains generating until Stop or Exit; test bounds
+are not production latency guarantees.
+
+Keyboard send shortcuts, Edit/wrap/timestamps and
 scroll-follow controls belong to #11; export belongs to #13. The user-approved
 real failure/stall evidence deferrals remain unchanged.
+
+Cancellation/recovery regressions cover silent/gated streams, partial/nonzero/
+synthetic authentication failures, same-session explicit recovery, no duplicate
+automatic prompts, cancelling command guards, retained input/markers, retired
+turn stability, repeated closing and owned child cleanup with an unrelated
+sentinel. These synthetic tests are not real-service evidence.
 
 `.github\workflows\windows-tests.yml` runs these commands for PRs and `main`
 pushes on `windows-latest` with .NET 10, read-only repository permissions, a

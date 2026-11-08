@@ -195,13 +195,25 @@ static async Task<int> ChatAsync(string[] arguments)
 {
     var scenario = File.Exists("chat-scenario") ? File.ReadAllText("chat-scenario") : "complete";
     File.WriteAllText("chat.arguments.json", JsonSerializer.Serialize(arguments));
+    File.AppendAllText("chat.requests.jsonl", JsonSerializer.Serialize(arguments) + "\n");
     File.WriteAllText("chat.started.pending", Environment.ProcessId.ToString());
     File.Move("chat.started.pending", "chat.started", overwrite: true);
-    if (scenario == "pre-failure")
+    if (scenario is "pre-failure" or "auth")
     {
-        Console.Error.Write("\u001b[31mSynthetic submission failure\u001b[0m");
+        Console.Error.Write(scenario == "auth" ? "Synthetic authentication failure. Sign in separately." :
+            "\u001b[31mSynthetic submission failure\u001b[0m");
         return 19;
     }
+    if (scenario == "silent-stall")
+    {
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        return 75;
+    }
+    using var child = scenario == "with-child"
+        ? Process.Start(new ProcessStartInfo(Environment.ProcessPath!) { ArgumentList = { "child" }, UseShellExecute = false })
+            ?? throw new InvalidOperationException("Synthetic chat child did not start.")
+        : null;
+    if (child is not null) await WaitForFileAsync("child.pid");
     if (scenario == "malformed")
     {
         Console.WriteLine("{not-json}");
@@ -238,7 +250,7 @@ static async Task<int> ChatAsync(string[] arguments)
         var json = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = first } });
         foreach (var part in Encoding.UTF8.GetBytes(json + "\n").Chunk(7))
             await WriteBytesAsync(part);
-        if (scenario is "stream" or "partial-failure" or "stall") await WaitForFileAsync("chat.continue");
+        if (scenario is "stream" or "partial-failure" or "stall" or "with-child") await WaitForFileAsync("chat.continue");
         var unicodeJson = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = second } },
             new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
         foreach (var part in Encoding.UTF8.GetBytes(unicodeJson + "\n").Chunk(1))

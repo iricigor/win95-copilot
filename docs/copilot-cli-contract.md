@@ -146,6 +146,16 @@ unflushed partial history, or immediate termination of remote billing/work.
 Never use process-name kills or assume a cancelled turn has a terminal result.
 Never automatically retry an accepted prompt.
 
+The application now exposes Stop using the exercised owned process transport.
+It remains busy in Cancelling until the request and queued transcript updates
+settle, keeps partial text/input with a cancelled marker, and permits an explicit
+next prompt on the retained identity. Failure requires explicit Connect, which
+checks version/authenticated zero-tool readiness on that same identity without
+resubmitting the failed user prompt. Failed recovery does not accept a fresh
+identity. Callback/request guards and one close path prevent retired updates
+or repeated close requests from bypassing owned-work settlement. Clear Window's
+new-session UX remains a separate task.
+
 An intentionally unknown argument exercises actual CLI validation, a nonzero
 exit, separated diagnostics, and no inference. Subsequent continuation uses the
 same earlier session. This is a **pre-dispatch failure**, not a reproduced

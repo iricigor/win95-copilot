@@ -16,13 +16,18 @@ public sealed class CopilotReadiness(string storageDirectory)
         var work = Path.Combine(storageDirectory, "work");
         Directory.CreateDirectory(home);
         Directory.CreateDirectory(work);
-        var version = await RunAsync(CreateStartInfo(executable, home, work,
+        var session = new BackendSession(executable, Guid.NewGuid(), home, work);
+        return await ResumeAsync(session, cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task<BackendSession> ResumeAsync(BackendSession session, CancellationToken cancellationToken)
+    {
+        var version = await RunAsync(CreateStartInfo(session.ExecutablePath, session.Home, session.WorkingDirectory,
             ["--no-auto-update", "--version"]), cancellationToken).ConfigureAwait(false);
         if (!version.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Contains("GitHub Copilot CLI 1.0.81."))
             throw new InvalidDataException("This app supports the verified bundled Copilot CLI 1.0.81 contract only. Select a compatible executable; other versions need text-only contract verification. No install or update was attempted.");
 
-        var session = new BackendSession(executable, Guid.NewGuid(), home, work);
         var output = await RunAsync(CreateRequest(session,
             "Connection check only. Reply with READY. Do not use tools."), cancellationToken).ConfigureAwait(false);
         try { VerifyResponse(output, session.Id); }

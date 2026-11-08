@@ -173,15 +173,20 @@ public class BackendTests
     [Theory]
     [InlineData(false, 0)]
     [InlineData(true, 1)]
-    public void StartupAutoConnectAndManualReconnectUseSamePreparation(bool auto, int startupCalls) => OnSta(async () =>
+    public void StartupPreparesOnceAndManualReconnectVerifiesExistingIdentity(bool auto, int startupCalls) => OnSta(async () =>
     {
         using var fixture = new Fixture();
         fixture.Store.Save(new AppSettings { ExecutablePath = fixture.Executable, AutoConnect = auto });
         var calls = 0;
+        var resumes = 0;
         var backend = new BackendController(fixture.Store, new BackendDiscovery("", []), (exe, _) =>
         {
             calls++;
             return Task.FromResult(new BackendSession(exe, Guid.NewGuid(), fixture.Root, fixture.Work));
+        }, (session, _) =>
+        {
+            resumes++;
+            return Task.FromResult(session);
         });
         var window = new MainWindow(backend);
         try
@@ -192,7 +197,8 @@ public class BackendTests
             Assert.True(ShellCommands.Connect.CanExecute(null, window));
             ShellCommands.Connect.Execute(null, window);
             ShellCommands.Connect.Execute(null, window);
-            Assert.Equal(startupCalls + 2, calls);
+            Assert.Equal(1, calls);
+            Assert.Equal(startupCalls + 1, resumes);
             ShellCommands.AutoConnect.Execute(null, window);
             Assert.Equal(!auto, fixture.Store.Load().AutoConnect);
             Assert.False(ShellCommands.Send.CanExecute(null, window));

@@ -63,9 +63,10 @@
             <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
                 <Button x:Name="SendButton" Content="_SEND" MinWidth="80" Command="{x:Static local:ShellCommands.Send}"
                         CommandTarget="{Binding ElementName=ShellWindow}" />
-                <Button x:Name="StopButton" Content="S_top" IsEnabled="False" MinWidth="80" Margin="0,6,0,0"
-                        ToolTip="Stop will be implemented with cancellation controls. Exit settles the owned request."
-                        Command="{x:Static local:ShellCommands.Stop}" />
+                <Button x:Name="StopButton" Content="S_top" MinWidth="80" Margin="0,6,0,0"
+                        ToolTip="Cancel this request and preserve its partial response. No automatic retry."
+                        Command="{x:Static local:ShellCommands.Stop}"
+                        CommandTarget="{Binding ElementName=ShellWindow}" />
             </StackPanel>
         </Grid>
         <Border Grid.Row="4" BorderBrush="#808080" BorderThickness="1,1,0,0" Margin="3,0,3,3">
