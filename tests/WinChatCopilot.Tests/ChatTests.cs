@@ -943,6 +943,6 @@ public class ChatTests
             backend.Load();
             return backend;
         }
-        public void Dispose() => Directory.Delete(Root, recursive: true);
+        public void Dispose() => FixtureDirectory.Delete(Root);
     }
 }

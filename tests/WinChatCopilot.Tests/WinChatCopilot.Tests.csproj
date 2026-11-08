@@ -21,6 +21,11 @@
     <Using Include="Xunit" />
     <None Include="..\..\scripts\*.ps1" Link="Scripts\%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\scripts\*.psm1" Link="Scripts\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures\PrereleaseFixture.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\.github\workflows\windows-tests.yml" Link="Fixtures\windows-tests.yml"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
