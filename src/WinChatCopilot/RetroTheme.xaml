@@ -116,7 +116,7 @@
             </Trigger>
         </Style.Triggers>
     </Style>
-    <Style TargetType="TextBox">
+    <Style x:Key="RetroTextAreaStyle" TargetType="TextBoxBase">
         <Setter Property="FontFamily" Value="Courier New" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Background" Value="White" />
@@ -125,7 +125,7 @@
         <Setter Property="Padding" Value="4" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="TextBox">
+                <ControlTemplate TargetType="TextBoxBase">
                     <Border BorderBrush="#808080" BorderThickness="1,1,0,0">
                         <Border BorderBrush="White" BorderThickness="0,0,1,1">
                             <Border Background="{TemplateBinding Background}" BorderBrush="Black" BorderThickness="1">
@@ -137,6 +137,8 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <Style TargetType="TextBox" BasedOn="{StaticResource RetroTextAreaStyle}" />
+    <Style TargetType="local:TranscriptView" BasedOn="{StaticResource RetroTextAreaStyle}" />
     <Style TargetType="Menu">
         <Setter Property="Background" Value="White" />
         <Setter Property="Template">

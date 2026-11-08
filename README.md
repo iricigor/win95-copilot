@@ -254,6 +254,18 @@ partial text and failure/cancellation markers. These presentation preferences
 can be changed and saved during generation without changing backend identity.
 Save errors are reported and the previous preference/check state is restored.
 
+The read-only native rich-text transcript keeps **User:** and **Assistant:**
+bold, with normal-weight message text starting after one space on the same line.
+Messages and turns have no generated blank separator rows. Timestamps and state
+markers remain normal weight; empty failed/cancelled replies show their marker
+beside the assistant label. Only trailing CR/LF at message boundaries is hidden;
+internal newlines, tabs, Unicode and other whitespace remain intact, and canonical
+conversation data is not trimmed. Copy and UTF-8 export use ordinary plain text,
+not Markdown/RTF markup. Wrap-off measures unwrapped text for horizontal scrolling.
+Exceptionally long lines remain subject to WPF's native text-layout limits
+(including its 1,000,000-DIP page-width ceiling); no message text is discarded
+or shortened.
+
 Streaming follows the transcript only while at the bottom. Scrolling away
 preserves the reading offset and selection as text arrives; returning to the
 bottom resumes following. Appending output does not move keyboard focus or

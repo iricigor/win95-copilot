@@ -27,7 +27,7 @@ public class ShellTests
             Assert.Equal(Color.FromRgb(192, 192, 192), ((SolidColorBrush)window.Background).Color);
             Assert.Null(window.Effect);
 
-            var transcript = (TextBox)window.FindName("Transcript");
+            var transcript = (TranscriptView)window.FindName("Transcript");
             var input = (TextBox)window.FindName("PromptInput");
             Assert.True(transcript.IsReadOnly);
             Assert.False(input.IsReadOnly);

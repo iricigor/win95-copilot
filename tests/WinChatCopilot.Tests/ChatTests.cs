@@ -158,7 +158,7 @@ public class ChatTests
             await window.InitializeBackendAsync();
             await backend.ConnectAsync(CancellationToken.None);
             var input = (TextBox)window.FindName("PromptInput");
-            var transcript = (TextBox)window.FindName("Transcript");
+            var transcript = (TranscriptView)window.FindName("Transcript");
             input.Text = " \n";
             await window.SendAsync();
             Assert.Empty(window.Turns);
@@ -185,7 +185,8 @@ public class ChatTests
             Assert.Equal(ResponseState.Completed, turn.State);
             Assert.NotNull(turn.FinishedAt);
             Assert.True(turn.FinishedAt >= turn.SubmittedAt);
-            Assert.Equal("User:\r\nsynthetic\nmultiline\r\n\r\nAssistant:\r\n" + CleanResponse + "\r\n\r\n", transcript.Text);
+            Assert.Equal("User: synthetic\nmultiline\r\nAssistant: " + CleanResponse + "\r\n",
+                transcript.Text);
             Assert.True(transcript.IsReadOnly);
             Assert.Empty(input.Text);
             Assert.False(input.IsReadOnly);
@@ -227,7 +228,7 @@ public class ChatTests
             Assert.Equal(expected, turn.Response);
             Assert.Equal(ResponseState.Failed, turn.State);
             Assert.NotNull(turn.Error);
-            Assert.Contains("[Failed]", ((TextBox)window.FindName("Transcript")).Text);
+            Assert.Contains("[Failed]", ((TranscriptView)window.FindName("Transcript")).Text);
             Assert.Equal("keep synthetic input", ((TextBox)window.FindName("PromptInput")).Text);
             Assert.False(ShellCommands.Send.CanExecute(null, window));
             Assert.True(ShellCommands.Connect.CanExecute(null, window));
@@ -428,7 +429,7 @@ public class ChatTests
             await window.InitializeBackendAsync();
             await backend.ConnectAsync(CancellationToken.None);
             var input = (TextBox)window.FindName("PromptInput");
-            var transcript = (TextBox)window.FindName("Transcript");
+            var transcript = (TranscriptView)window.FindName("Transcript");
             input.Text = "synthetic cancelled input";
             var run = window.SendAsync();
             await WaitAsync(() => window.Turns[0].Response.Length != 0);
@@ -502,7 +503,7 @@ public class ChatTests
             Assert.True(child.HasExited);
             Assert.False(sentinel.HasExited);
             Assert.Equal(ResponseState.Cancelled, Assert.Single(window.Turns).State);
-            Assert.Contains("[Cancelled]", ((TextBox)window.FindName("Transcript")).Text);
+            Assert.Contains("[Cancelled]", ((TranscriptView)window.FindName("Transcript")).Text);
         }
         finally
         {
@@ -527,7 +528,7 @@ public class ChatTests
             await backend.ConnectAsync(CancellationToken.None);
             var oldId = backend.Session!.Id;
             var input = (TextBox)window.FindName("PromptInput");
-            var transcript = (TextBox)window.FindName("Transcript");
+            var transcript = (TranscriptView)window.FindName("Transcript");
             input.Text = "first synthetic turn";
             var generation = window.SendAsync();
             await WaitAsync(() => window.Turns[0].Response.Length != 0);
@@ -617,7 +618,7 @@ public class ChatTests
             await window.ClearWindowAsync();
             Assert.True(errorSeen);
             Assert.Empty(window.Turns);
-            Assert.Empty(((TextBox)window.FindName("Transcript")).Text);
+            Assert.Empty(((TranscriptView)window.FindName("Transcript")).Text);
             Assert.Null(backend.Session);
             Assert.Equal(BackendState.Failed, backend.State);
             Assert.Contains("new conversation preparation failed", ((TextBlock)window.FindName("BackendStatus")).Text);

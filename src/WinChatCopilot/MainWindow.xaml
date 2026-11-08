@@ -56,8 +56,8 @@
             <Button Content="_Help" Command="{x:Static local:ShellCommands.About}"
                     CommandTarget="{Binding ElementName=ShellWindow}" />
         </StackPanel>
-        <TextBox x:Name="Transcript" Grid.Row="2" Margin="8,0,8,6" IsReadOnly="True"
-                 AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"
+        <local:TranscriptView x:Name="Transcript" Grid.Row="2" Margin="8,0,8,6" IsReadOnly="True"
+                 VerticalScrollBarVisibility="Auto"
                  HorizontalScrollBarVisibility="Auto" ContextMenu="{x:Null}"
                  AutomationProperties.Name="Transcript" />
         <Grid Grid.Row="3" Margin="8,0,8,8">

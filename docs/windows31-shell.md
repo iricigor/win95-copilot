@@ -61,6 +61,12 @@ without changing canonical turn data. The transcript remains read-only and
 streaming respects a user who scrolls away. See the README for exact shortcut
 and timestamp conventions.
 
+The native read-only rich transcript uses the same recessed text-area template,
+Courier New and retro scrollbars as the input. Speaker labels are bold, with
+normal-weight bodies beside them and no generated blank separator rows. Timestamp
+and failure/cancellation text remains normal weight. This does not change the
+Windows 3.1 chrome or introduce Markdown rendering.
+
 ## Automation-first verification and optional local review
 
 Run the README restore/build/test commands and automate feasible command,

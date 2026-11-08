@@ -30,8 +30,8 @@ public class ExportTests
             var stamp = timestamps
                 ? " [" + turn.SubmittedAt.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture) + "]"
                 : "";
-            Assert.Equal("User" + stamp + ":\r\n" + turn.Prompt + "\r\n\r\nAssistant" + stamp +
-                ":\r\npartial \u20ac\r\nsecond\n\n" + marker + "\r\n\r\n",
+            Assert.Equal("User" + stamp + ": " + turn.Prompt + "\r\nAssistant" + stamp +
+                ": partial \u20ac\r\nsecond" + marker + "\r\n",
                 TranscriptDisplay.Format([turn], timestamps, markGenerating: true));
             Assert.Empty(TranscriptDisplay.Format([], timestamps, markGenerating: true));
         }
@@ -53,8 +53,8 @@ public class ExportTests
         turns[1].Response += " later";
         turns[1].State = ResponseState.Completed;
         turns.Clear();
-        Assert.Equal("User:\r\nfirst\r\n\r\nAssistant:\r\ncomplete\r\n\r\n" +
-            "User:\r\nsecond\r\n\r\nAssistant:\r\npartial\r\n[In progress]\r\n\r\n", snapshot);
+        Assert.Equal("User: first\r\nAssistant: complete\r\n" +
+            "User: second\r\nAssistant: partial\r\n[In progress]\r\n", snapshot);
         Assert.Empty(TranscriptDisplay.Format(turns, false, markGenerating: true));
     }
 
@@ -65,7 +65,7 @@ public class ExportTests
     public void EmptyPartialResponseStillHasExplicitState(ResponseState state, string marker)
     {
         var turn = new ChatTurn("submitted") { State = state };
-        Assert.Equal("User:\r\nsubmitted\r\n\r\nAssistant:\r\n\r\n" + marker + "\r\n\r\n",
+        Assert.Equal("User: submitted\r\nAssistant: " + marker + "\r\n",
             TranscriptDisplay.Format([turn], false, markGenerating: true));
     }
 
@@ -231,7 +231,7 @@ public class ExportTests
             ((TextBox)window.FindName("PromptInput")).Text = "synthetic snapshot\n\u6f22";
             generation = window.SendAsync();
             await WaitAsync(() => window.Turns[0].Response == "first ");
-            var expected = "User:\r\nsynthetic snapshot\n\u6f22\r\n\r\nAssistant:\r\nfirst \r\n[In progress]\r\n\r\n";
+            var expected = "User: synthetic snapshot\n\u6f22\r\nAssistant: first \r\n[In progress]\r\n";
             Assert.True(ShellCommands.SaveTranscript.CanExecute(null, window));
             await window.SaveTranscriptAsync();
             Assert.Equal(expected, File.ReadAllText(fixture.Destination));
@@ -240,7 +240,8 @@ public class ExportTests
             Assert.Equal(ResponseState.Completed, window.Turns[0].State);
             Assert.Contains("second", window.Turns[0].Response);
             Assert.True(backend.Settings.ShowTimestamp);
-            Assert.Equal(TranscriptDisplay.Format(window.Turns, true), ((TextBox)window.FindName("Transcript")).Text);
+            Assert.Equal(TranscriptDisplay.Format(window.Turns, true),
+                ((TranscriptView)window.FindName("Transcript")).Text);
             Assert.Empty(((TextBox)window.FindName("PromptInput")).Text);
             Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
         }
@@ -302,7 +303,7 @@ public class ExportTests
             input.Text = "synthetic submitted";
             await window.SendAsync();
             input.Text = "unsent kept";
-            var original = ((TextBox)window.FindName("Transcript")).Text;
+            var original = ((TranscriptView)window.FindName("Transcript")).Text;
             var identity = backend.Session!.Id;
             File.WriteAllText(fixture.Destination, "previous");
             window.Show();
@@ -313,7 +314,7 @@ public class ExportTests
                 Assert.Contains(fixture.Destination, Assert.Single(diagnostics));
             }
             Assert.Equal("previous", File.ReadAllText(fixture.Destination));
-            Assert.Equal(original, ((TextBox)window.FindName("Transcript")).Text);
+            Assert.Equal(original, ((TranscriptView)window.FindName("Transcript")).Text);
             Assert.Equal("unsent kept", input.Text);
             Assert.Equal(identity, backend.Session!.Id);
             Assert.Equal(ResponseState.Completed, Assert.Single(window.Turns).State);

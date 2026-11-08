@@ -3,6 +3,8 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
 using WinChatCopilot.Backend;
@@ -80,11 +82,11 @@ public class InputTests
             Assert.True(((MenuItem)window.FindName("SendEnterMenu")).IsChecked);
             Assert.False(((MenuItem)window.FindName("SendControlEnterMenu")).IsChecked);
             var input = (TextBox)window.FindName("PromptInput");
-            var transcript = (TextBox)window.FindName("Transcript");
+            var transcript = (TranscriptView)window.FindName("Transcript");
             Assert.False(input.AcceptsReturn);
             ShellCommands.WordWrap.Execute(null, window);
             Assert.Equal(TextWrapping.Wrap, input.TextWrapping);
-            Assert.Equal(TextWrapping.Wrap, transcript.TextWrapping);
+            Assert.True(double.IsNaN(transcript.Document.PageWidth));
             Assert.Equal(ScrollBarVisibility.Disabled, transcript.HorizontalScrollBarVisibility);
             await backend.ConnectAsync(CancellationToken.None);
             input.Text = "canonical \u6f22\nmultiline";
@@ -126,16 +128,16 @@ public class InputTests
 
     [Theory]
     [InlineData(ResponseState.Generating, "")]
-    [InlineData(ResponseState.Completed, "\r\n\r\n")]
-    [InlineData(ResponseState.Failed, "\r\n[Failed]\r\n\r\n")]
-    [InlineData(ResponseState.Cancelled, "\r\n[Cancelled]\r\n\r\n")]
+    [InlineData(ResponseState.Completed, "")]
+    [InlineData(ResponseState.Failed, "\r\n[Failed]")]
+    [InlineData(ResponseState.Cancelled, "\r\n[Cancelled]")]
     public void TimestampFormattingKeepsMultilinePartialTextAndState(ResponseState state, string ending)
     {
         var turn = new ChatTurn("line one\n\u6f22") { Response = "partial\r\ntext", State = state };
-        Assert.Equal("User:\r\nline one\n\u6f22\r\n\r\nAssistant:\r\npartial\r\ntext" + ending,
+        Assert.Equal("User: line one\n\u6f22\r\nAssistant: partial\r\ntext" + ending + "\r\n",
             TranscriptDisplay.Format([turn], false));
-        Assert.Equal(TranscriptDisplay.Heading("User", turn.SubmittedAt, true) + turn.Prompt + "\r\n\r\n" +
-            TranscriptDisplay.Heading("Assistant", turn.SubmittedAt, true) + turn.Response + ending,
+        Assert.Equal(TranscriptDisplay.Heading("User", turn.SubmittedAt, true) + turn.Prompt + "\r\n" +
+            TranscriptDisplay.Heading("Assistant", turn.SubmittedAt, true) + turn.Response + ending + "\r\n",
             TranscriptDisplay.Format([turn], true));
         Assert.Empty(TranscriptDisplay.Format([], true));
     }
@@ -154,7 +156,7 @@ public class InputTests
             await backend.ConnectAsync(CancellationToken.None);
             window.Show();
             var input = (TextBox)window.FindName("PromptInput");
-            var transcript = (TextBox)window.FindName("Transcript");
+            var transcript = (TranscriptView)window.FindName("Transcript");
             input.Text = "synthetic scroll";
             var run = window.SendAsync();
             await WaitAsync(() => transcript.Text.Contains("synthetic line 149") &&
@@ -162,7 +164,18 @@ public class InputTests
             transcript.ScrollToVerticalOffset(100);
             await WaitAsync(() => Math.Abs(transcript.VerticalOffset - 100) < 1);
             var before = transcript.VerticalOffset;
-            transcript.Select(3, 6);
+            var selectionStart = transcript.Document.ContentStart.GetPositionAtOffset(6)!;
+            var selectionEnd = selectionStart.GetPositionAtOffset(6)!;
+            transcript.Selection.Select(selectionStart, selectionEnd);
+            var selectedText = transcript.Selection.Text;
+            var textBeforeSelection = new TextRange(transcript.Document.ContentStart, transcript.Selection.Start).Text;
+            input.Focus();
+            ShellCommands.ShowTimestamp.Execute(null, window);
+            Assert.Equal(selectedText, transcript.Selection.Text);
+            Assert.True(input.IsKeyboardFocusWithin);
+            ShellCommands.ShowTimestamp.Execute(null, window);
+            Assert.Equal(selectedText, transcript.Selection.Text);
+            Assert.True(input.IsKeyboardFocusWithin);
             if (returnToBottom)
             {
                 transcript.ScrollToEnd();
@@ -174,8 +187,8 @@ public class InputTests
             if (returnToBottom)
                 Assert.InRange(transcript.ExtentHeight - transcript.ViewportHeight - transcript.VerticalOffset, 0, 1);
             else Assert.InRange(Math.Abs(transcript.VerticalOffset - before), 0, 1);
-            Assert.Equal(3, transcript.SelectionStart);
-            Assert.Equal(6, transcript.SelectionLength);
+            Assert.Equal(selectedText, transcript.Selection.Text);
+            Assert.Equal(textBeforeSelection, new TextRange(transcript.Document.ContentStart, transcript.Selection.Start).Text);
             Assert.Contains("synthetic line 169", transcript.Text);
         }
         finally { window.Close(); }
@@ -190,18 +203,19 @@ public class InputTests
         {
             await window.InitializeBackendAsync();
             var input = (TextBox)window.FindName("PromptInput");
-            var transcript = (TextBox)window.FindName("Transcript");
+            var transcript = (TranscriptView)window.FindName("Transcript");
             input.Text = "synthetic input";
-            transcript.Text = "synthetic transcript";
+            transcript.Document.Blocks.Add(new Paragraph(new Run("synthetic transcript")));
             Assert.Same(ApplicationCommands.Copy, ShellCommands.Copy);
             Assert.Same(ApplicationCommands.Paste, ShellCommands.Paste);
             Assert.Same(ApplicationCommands.SelectAll, ShellCommands.SelectAll);
-            foreach (var area in new[] { input, transcript })
+            foreach (var area in new TextBoxBase[] { input, transcript })
             {
                 FocusManager.SetFocusedElement(window, area);
                 Assert.True(ShellCommands.SelectAll.CanExecute(null, area));
                 ShellCommands.SelectAll.Execute(null, area);
-                Assert.Equal(area.Text, area.SelectedText);
+                Assert.Equal(area == input ? input.Text : transcript.Text,
+                    area == input ? input.SelectedText : transcript.Selection.Text);
                 Assert.True(ShellCommands.Copy.CanExecute(null, area));
             }
             Assert.False(ShellCommands.Paste.CanExecute(null, transcript));
@@ -245,6 +259,140 @@ public class InputTests
             Assert.Equal("preserved synthetic input", input.Text);
         }
         finally { timer.Stop(); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false, ResponseState.Completed, "Hi!\r\n")]
+    [InlineData(true, ResponseState.Completed, "Hi!\n")]
+    [InlineData(false, ResponseState.Failed, "partial\r\n")]
+    [InlineData(true, ResponseState.Cancelled, "partial\n\n")]
+    [InlineData(false, ResponseState.Failed, "")]
+    [InlineData(true, ResponseState.Cancelled, "\r\n")]
+    public void RichTranscriptHasOnlyBoldLabelsAndCompactNormalBodies(
+        bool timestamps, ResponseState state, string response) => OnSta(() =>
+    {
+        var view = new TranscriptView();
+        var turns = new[]
+        {
+            new ChatTurn("Hi\r\n") { Response = response, State = state },
+            new ChatTurn("line\t\u6f22\n\n  next \n") { Response = "reply\n\ninside\t \u20ac\r\n", State = ResponseState.Completed }
+        };
+        view.Update(turns, timestamps);
+        Assert.Equal(TranscriptDisplay.Format(turns, timestamps), view.Text);
+        Assert.Equal(4, view.Document.Blocks.Count);
+        foreach (var paragraph in view.Document.Blocks.Cast<Paragraph>())
+        {
+            Assert.Equal(new Thickness(0), paragraph.Margin);
+            Assert.Equal(new Thickness(0), paragraph.Padding);
+            var runs = paragraph.Inlines.Cast<Run>().ToArray();
+            Assert.Equal(4, runs.Length);
+            Assert.Equal(FontWeights.Bold, runs[0].FontWeight);
+            Assert.Equal(FontWeights.Normal, runs[1].FontWeight);
+            Assert.Equal(FontWeights.Bold, runs[2].FontWeight);
+            Assert.Equal(":", runs[2].Text);
+            Assert.Equal(FontWeights.Normal, runs[3].FontWeight);
+            Assert.StartsWith(" ", runs[3].Text);
+        }
+        Assert.Equal("Hi\r\n", turns[0].Prompt);
+        Assert.Equal(response, turns[0].Response);
+        Assert.Equal("line\t\u6f22\n\n  next \n", turns[1].Prompt);
+        Assert.Equal("reply\n\ninside\t \u20ac\r\n", turns[1].Response);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void GreetingAndProgressiveBoundariesPreserveRunsSelectionAndCanonicalText() => OnSta(() =>
+    {
+        var view = new TranscriptView();
+        var turn = new ChatTurn("Hi");
+        view.Update([turn], false);
+        Assert.Equal("User: Hi\r\nAssistant: \r\n", view.Text);
+        var assistant = (Paragraph)view.Document.Blocks.LastBlock;
+        var body = (Run)assistant.Inlines.LastInline;
+        foreach (var chunk in new[] { "Hi!", "\r", "\n", "\n", "How", "\t\u6f22", "\r\n" })
+        {
+            turn.Response += chunk;
+            view.Update([turn], false);
+            Assert.Same(assistant, view.Document.Blocks.LastBlock);
+            Assert.Same(body, assistant.Inlines.LastInline);
+            Assert.Equal(TranscriptDisplay.Format([turn], false), view.Text);
+        }
+        var start = body.ContentStart.GetPositionAtOffset(1)!;
+        var end = start.GetPositionAtOffset(3)!;
+        view.Selection.Select(start, end);
+        view.Update([turn], true);
+        Assert.Equal("Hi!", view.Selection.Text);
+        view.Update([turn], false);
+        turn.State = ResponseState.Completed;
+        view.Update([turn], false);
+        Assert.Equal("Hi!", view.Selection.Text);
+        Assert.Equal("Hi!\r\n\nHow\t\u6f22\r\n", turn.Response);
+        turn.Response = "Hi! How can I help you today?";
+        view.Update([turn], false);
+        Assert.Equal("User: Hi\r\nAssistant: Hi! How can I help you today?\r\n", view.Text);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void PopulatedRichTranscriptWrapCopyPasteAndFocusUseNativeBehavior() => OnSta(async () =>
+    {
+        using var fixture = new Fixture("complete");
+        var window = new MainWindow(fixture.Controller());
+        try
+        {
+            await window.InitializeBackendAsync();
+            window.Show();
+            var view = (TranscriptView)window.FindName("Transcript");
+            var turn = new ChatTurn(new string('W', 400))
+            {
+                Response = string.Join("\n", Enumerable.Range(0, 80).Select(i => $"line {i}")),
+                State = ResponseState.Completed
+            };
+            view.Update([turn], false);
+            view.SetWordWrap(false);
+            view.UpdateLayout();
+            Assert.True(view.ExtentWidth > view.ViewportWidth);
+            Assert.True(view.ExtentHeight > view.ViewportHeight);
+            view.ScrollToHorizontalOffset(100);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.InRange(view.HorizontalOffset, 99, 101);
+            view.Focus();
+            ShellCommands.SelectAll.Execute(null, view);
+            Assert.Equal(view.Text, view.Selection.Text);
+            string? copied = null;
+            DataObject.AddCopyingHandler(view, (_, e) =>
+            {
+                copied = (string)e.DataObject.GetData(DataFormats.UnicodeText);
+                e.CancelCommand();
+            });
+            ShellCommands.Copy.Execute(null, view);
+            Assert.Equal(TranscriptDisplay.Format([turn], false), copied);
+            Assert.DoesNotContain("**", copied!);
+            Assert.False(ShellCommands.Paste.CanExecute(null, view));
+            ShellCommands.Paste.Execute(null, view);
+            Assert.Equal(copied, view.Text);
+            var selected = view.Selection.Text;
+            view.SetWordWrap(true);
+            view.UpdateLayout();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.True(double.IsNaN(view.Document.PageWidth));
+            Assert.InRange(view.ExtentWidth - view.ViewportWidth, 0, 1);
+            Assert.Equal(selected, view.Selection.Text);
+            Assert.True(view.IsKeyboardFocusWithin);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void ExtremeLineKeepsAllTextWithinSupportedNativeLayoutWidth() => OnSta(() =>
+    {
+        var view = new TranscriptView { FontSize = 14 };
+        var turn = new ChatTurn("synthetic") { Response = new string('W', 130_000), State = ResponseState.Completed };
+        view.Update([turn], false);
+        Assert.InRange(view.Document.PageWidth, 1, 1_000_000);
+        Assert.Equal(TranscriptDisplay.Format([turn], false), view.Text);
+        Assert.Equal(130_000, turn.Response.Length);
+        return Task.CompletedTask;
     });
 
     private static async Task WaitAsync(Func<bool> condition)

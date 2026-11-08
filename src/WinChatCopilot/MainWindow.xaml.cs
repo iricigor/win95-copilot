@@ -164,7 +164,7 @@ public partial class MainWindow : RetroWindow
         try
         {
             backend.Save(settings);
-            if (timestampsChanged) ChangeTranscript(() => Transcript.Text = TranscriptDisplay.Format(turns, settings.ShowTimestamp));
+            if (timestampsChanged) RefreshTranscript();
         }
         catch (Exception error) when (IsBackendError(error)) { ShowError(error); }
         UpdateBackend();
@@ -183,14 +183,14 @@ public partial class MainWindow : RetroWindow
     {
         var offset = Transcript.VerticalOffset;
         var horizontalOffset = Transcript.HorizontalOffset;
-        var selectionStart = Transcript.SelectionStart;
-        var selectionLength = Transcript.SelectionLength;
+        var selectionEmpty = Transcript.Selection.IsEmpty;
+        var selectionStart = Transcript.Selection.Start.GetPositionAtOffset(0, System.Windows.Documents.LogicalDirection.Forward)!;
+        var selectionEnd = Transcript.Selection.End.GetPositionAtOffset(0, System.Windows.Documents.LogicalDirection.Backward)!;
         updatingTranscript = true;
         try
         {
             change();
-            Transcript.Select(Math.Min(selectionStart, Transcript.Text.Length),
-                Math.Min(selectionLength, Math.Max(0, Transcript.Text.Length - selectionStart)));
+            Transcript.Selection.Select(selectionStart, selectionEmpty ? selectionStart : selectionEnd);
             Transcript.UpdateLayout();
             Transcript.ScrollToVerticalOffset(followingTranscript ? double.MaxValue : offset);
             Transcript.ScrollToHorizontalOffset(horizontalOffset);
@@ -198,7 +198,8 @@ public partial class MainWindow : RetroWindow
         finally { updatingTranscript = false; }
     }
 
-    private void AppendTranscript(string text) => ChangeTranscript(() => Transcript.AppendText(text));
+    private void RefreshTranscript() =>
+        ChangeTranscript(() => Transcript.Update(turns, backend.Settings.ShowTimestamp));
 
     internal Task SaveTranscriptAsync()
     {
@@ -236,8 +237,7 @@ public partial class MainWindow : RetroWindow
         stopRequested = false;
         activeTurn = turn;
         turns.Add(turn);
-        AppendTranscript(TranscriptDisplay.Heading("User", turn.SubmittedAt, backend.Settings.ShowTimestamp) +
-            prompt + "\r\n\r\n" + TranscriptDisplay.Heading("Assistant", turn.SubmittedAt, backend.Settings.ShowTimestamp));
+        RefreshTranscript();
         var generation = GenerateAsync(turn);
         pendingGeneration = generation.IsCompleted ? null : generation;
         return generation;
@@ -271,7 +271,7 @@ public partial class MainWindow : RetroWindow
             activeTurn = null;
             turns.Clear();
             followingTranscript = true;
-            ChangeTranscript(() => Transcript.Clear());
+            RefreshTranscript();
             await backend.ResetAsync(lifetime.Token);
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
@@ -297,7 +297,7 @@ public partial class MainWindow : RetroWindow
                 {
                     if (!ReferenceEquals(activeTurn, turn) || shutdownComplete) return;
                     turn.Response += chunk;
-                    AppendTranscript(chunk);
+                    RefreshTranscript();
                 }).Task;
             }, lifetime.Token);
         }
@@ -316,7 +316,7 @@ public partial class MainWindow : RetroWindow
             await lastUpdate;
             turn.State = finalState;
             turn.FinishedAt = DateTimeOffset.Now;
-            AppendTranscript(TranscriptDisplay.Ending(turn.State));
+            RefreshTranscript();
             if (turn.State == ResponseState.Completed) PromptInput.Clear();
             activeTurn = null;
             pendingGeneration = null;
@@ -334,7 +334,8 @@ public partial class MainWindow : RetroWindow
         TimestampMenu.IsChecked = backend.Settings.ShowTimestamp;
         PromptInput.AcceptsReturn = backend.Settings.SendMode == SendMode.ControlEnter;
         var wrapping = backend.Settings.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap;
-        Transcript.TextWrapping = PromptInput.TextWrapping = wrapping;
+        PromptInput.TextWrapping = wrapping;
+        Transcript.SetWordWrap(backend.Settings.WordWrap);
         Transcript.HorizontalScrollBarVisibility = PromptInput.HorizontalScrollBarVisibility =
             backend.Settings.WordWrap ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
         PromptInput.IsReadOnly = backend.IsBusy || pendingGeneration is not null || resetting || closing;
