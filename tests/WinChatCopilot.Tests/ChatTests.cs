@@ -512,6 +512,185 @@ public class ChatTests
         }
     });
 
+    [Theory]
+    [InlineData("complete")]
+    [InlineData("stream")]
+    [InlineData("with-child")]
+    public void ClearWindowMenuSettlesOldWorkAndOnlyNewPromptsUseFreshIdentity(string scenario) => OnSta(async () =>
+    {
+        using var fixture = new Fixture(scenario);
+        var backend = fixture.Controller();
+        var window = new MainWindow(backend);
+        try
+        {
+            await window.InitializeBackendAsync();
+            await backend.ConnectAsync(CancellationToken.None);
+            var oldId = backend.Session!.Id;
+            var input = (TextBox)window.FindName("PromptInput");
+            var transcript = (TextBox)window.FindName("Transcript");
+            input.Text = "first synthetic turn";
+            var generation = window.SendAsync();
+            await WaitAsync(() => window.Turns[0].Response.Length != 0);
+            if (scenario == "complete")
+            {
+                await generation;
+                input.Text = "ordinary follow-up";
+                await window.SendAsync();
+                Assert.Equal(oldId, backend.Session!.Id);
+            }
+            var oldTurn = window.Turns[0];
+            using var parent = scenario == "complete" ? null
+                : Process.GetProcessById(int.Parse(File.ReadAllText(Path.Combine(fixture.Work, "chat.started"))));
+            using var child = scenario == "with-child"
+                ? Process.GetProcessById(int.Parse(File.ReadAllText(Path.Combine(fixture.Work, "child.pid")))) : null;
+            var menu = (MenuItem)((MenuItem)((Menu)window.FindName("MainMenu")).Items[0]).Items[1];
+            Assert.Same(ShellCommands.ClearWindow, menu.Command);
+            var command = (System.Windows.Input.RoutedCommand)menu.Command;
+            Assert.True(command.CanExecute(null, menu.CommandTarget));
+            command.Execute(null, menu.CommandTarget);
+            Assert.False(ShellCommands.Send.CanExecute(null, window));
+            Assert.False(ShellCommands.ClearWindow.CanExecute(null, window));
+            await window.ClearWindowAsync();
+            await window.SendAsync();
+            await generation;
+            await WaitAsync(() => backend.State == BackendState.Ready && window.Turns.Count == 0 &&
+                ShellCommands.ClearWindow.CanExecute(null, window));
+            if (parent is not null) Assert.True(parent.HasExited);
+            if (child is not null)
+            {
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.True(child.HasExited);
+            }
+            var freshId = backend.Session!.Id;
+            Assert.NotEqual(oldId, freshId);
+            Assert.Empty(transcript.Text);
+            if (scenario != "complete")
+            {
+                Assert.Equal(ResponseState.Cancelled, oldTurn.State);
+                Assert.Equal("first synthetic turn", input.Text);
+            }
+            File.WriteAllText(Path.Combine(fixture.Work, "chat.continue"), "");
+            File.WriteAllText(Path.Combine(fixture.Work, "chat-scenario"), "complete");
+            input.Text = "only explicit new conversation prompt";
+            await window.SendAsync();
+            var snapshot = transcript.Text;
+            await Task.Delay(100);
+            Assert.Equal(snapshot, transcript.Text);
+            Assert.Single(window.Turns);
+            Assert.DoesNotContain("first synthetic turn", transcript.Text);
+            var requests = File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl"))
+                .Select(line => JsonSerializer.Deserialize<string[]>(line)!).ToArray();
+            Assert.Equal(scenario == "complete" ? 3 : 2, requests.Length);
+            Assert.All(requests[..^1], args => Assert.Contains("--session-id=" + oldId, args));
+            Assert.Contains("--session-id=" + freshId, requests[^1]);
+            Assert.Equal("only explicit new conversation prompt", requests[^1][^1]);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void FailedResetClearsHistoryReportsErrorAndReconnectCannotFallBack() => OnSta(async () =>
+    {
+        using var fixture = new Fixture("complete");
+        var backend = fixture.Controller();
+        var window = new MainWindow(backend);
+        var errorSeen = false;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+        timer.Tick += (_, _) =>
+        {
+            foreach (var error in window.OwnedWindows.OfType<ErrorWindow>().ToArray())
+            {
+                errorSeen = true;
+                error.Close();
+            }
+        };
+        timer.Start();
+        try
+        {
+            await window.InitializeBackendAsync();
+            window.Show();
+            await backend.ConnectAsync(CancellationToken.None);
+            var oldId = backend.Session!.Id;
+            ((TextBox)window.FindName("PromptInput")).Text = "old conversation";
+            await window.SendAsync();
+            File.WriteAllText(Path.Combine(fixture.Work, "readiness-scenario"), "auth");
+            await window.ClearWindowAsync();
+            Assert.True(errorSeen);
+            Assert.Empty(window.Turns);
+            Assert.Empty(((TextBox)window.FindName("Transcript")).Text);
+            Assert.Null(backend.Session);
+            Assert.Equal(BackendState.Failed, backend.State);
+            Assert.Contains("new conversation preparation failed", ((TextBlock)window.FindName("BackendStatus")).Text);
+            ((TextBox)window.FindName("PromptInput")).Text = "unsent new prompt";
+            await window.SendAsync();
+            Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
+            File.WriteAllText(Path.Combine(fixture.Work, "readiness-scenario"), "ready");
+            await backend.ConnectAsync(CancellationToken.None);
+            Assert.NotEqual(oldId, backend.Session!.Id);
+            Assert.Empty(window.Turns);
+            Assert.Equal("unsent new prompt", ((TextBox)window.FindName("PromptInput")).Text);
+        }
+        finally { timer.Stop(); window.Close(); }
+    });
+
+    [Fact]
+    public async Task ResetRejectsBusyOrReusedIdentityAndGatesPreparationWithoutFallback()
+    {
+        using var fixture = new Fixture("complete");
+        var store = new SettingsStore(Path.Combine(fixture.Root, "settings.json"));
+        store.Save(new AppSettings { ExecutablePath = fixture.Session.ExecutablePath });
+        var next = new TaskCompletionSource<BackendSession>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var backend = new BackendController(store, new BackendDiscovery("", []),
+            (_, _) => ++calls == 1 ? Task.FromResult(fixture.Session) : next.Task);
+        backend.Load();
+        await backend.ConnectAsync(CancellationToken.None);
+        var reset = backend.ResetAsync(CancellationToken.None);
+        Assert.Null(backend.Session);
+        Assert.True(backend.IsBusy);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => backend.ResetAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => backend.ConnectAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => backend.SendAsync("racing prompt", _ => { }, CancellationToken.None));
+        next.SetResult(fixture.Session);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => reset);
+        Assert.Null(backend.Session);
+        Assert.Equal(BackendState.Failed, backend.State);
+        Assert.Equal(2, calls);
+        Assert.False(File.Exists(Path.Combine(fixture.Work, "chat.started")));
+    }
+
+    [Fact]
+    public void ExitDuringResetSettlesReadinessAndNeverAcceptsLateReadyState() => OnSta(async () =>
+    {
+        using var fixture = new Fixture("complete");
+        var backend = fixture.Controller();
+        var window = new MainWindow(backend);
+        var closed = false;
+        window.Closed += (_, _) => closed = true;
+        try
+        {
+            await window.InitializeBackendAsync();
+            await backend.ConnectAsync(CancellationToken.None);
+            File.Delete(Path.Combine(fixture.Work, "readiness.started"));
+            File.WriteAllText(Path.Combine(fixture.Work, "readiness-scenario"), "stall");
+            var reset = window.ClearWindowAsync();
+            await WaitAsync(() => File.Exists(Path.Combine(fixture.Work, "readiness.started")));
+            using var owned = Process.GetProcessById(int.Parse(File.ReadAllText(Path.Combine(fixture.Work, "readiness.started"))));
+            Assert.True(((TextBox)window.FindName("PromptInput")).IsReadOnly);
+            Assert.False(ShellCommands.Connect.CanExecute(null, window));
+            Assert.False(ShellCommands.ClearWindow.CanExecute(null, window));
+            window.Close();
+            window.Close();
+            await reset;
+            await WaitAsync(() => closed);
+            Assert.True(owned.HasExited);
+            Assert.Null(backend.Session);
+            Assert.Equal(BackendState.Disconnected, backend.State);
+            Assert.Empty(window.Turns);
+        }
+        finally { if (!closed) window.Close(); }
+    });
+
     private static async Task WaitAsync(Func<bool> condition)
     {
         var watch = Stopwatch.StartNew();

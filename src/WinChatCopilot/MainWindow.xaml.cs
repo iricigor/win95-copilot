@@ -20,6 +20,8 @@ public partial class MainWindow : RetroWindow
     private bool initialized;
     private Task? pendingConnection;
     private Task? pendingGeneration;
+    private Task? pendingReset;
+    private bool resetting;
     private bool followingTranscript = true;
     private bool updatingTranscript;
     private readonly List<ChatTurn> turns = [];
@@ -35,13 +37,13 @@ public partial class MainWindow : RetroWindow
         CommandBindings.Add(new CommandBinding(ShellCommands.About,
             (_, _) => new AboutWindow { Owner = this }.ShowDialog(), (_, e) => e.CanExecute = true));
         CommandBindings.Add(new CommandBinding(ShellCommands.Connect,
-            async (_, _) => await ConnectAsync(), (_, e) => e.CanExecute = initialized && !closing &&
+            async (_, _) => await ConnectAsync(), (_, e) => e.CanExecute = initialized && !closing && !resetting &&
                 !backend.IsBusy && pendingGeneration is null));
         CommandBindings.Add(new CommandBinding(ShellCommands.ConfigureBackend,
-            async (_, _) => await ConfigureAsync(), (_, e) => e.CanExecute = initialized && !closing &&
+            async (_, _) => await ConfigureAsync(), (_, e) => e.CanExecute = initialized && !closing && !resetting &&
                 !backend.IsBusy && pendingGeneration is null));
         CommandBindings.Add(new CommandBinding(ShellCommands.AutoConnect,
-            (_, _) => SaveAutoConnect(), (_, e) => e.CanExecute = initialized && !closing &&
+            (_, _) => SaveAutoConnect(), (_, e) => e.CanExecute = initialized && !closing && !resetting &&
                 !backend.IsBusy && pendingGeneration is null));
         CommandBindings.Add(new CommandBinding(ShellCommands.SendWithEnter,
             (_, _) => SaveDisplaySettings(backend.Settings with { SendMode = SendMode.Enter }),
@@ -56,12 +58,15 @@ public partial class MainWindow : RetroWindow
             (_, _) => SaveDisplaySettings(backend.Settings with { ShowTimestamp = !backend.Settings.ShowTimestamp }),
             (_, e) => e.CanExecute = initialized && !closing));
         CommandBindings.Add(new CommandBinding(ShellCommands.Send,
-            async (_, _) => await SendAsync(), (_, e) => e.CanExecute = !closing &&
+            async (_, _) => await SendAsync(), (_, e) => e.CanExecute = !closing && !resetting &&
                 pendingGeneration is null && backend.State == BackendState.Ready &&
                 !string.IsNullOrWhiteSpace(PromptInput?.Text)));
         CommandBindings.Add(new CommandBinding(ShellCommands.Stop,
-            async (_, _) => await StopAsync(), (_, e) => e.CanExecute = !closing &&
+            async (_, _) => await StopAsync(), (_, e) => e.CanExecute = !closing && !resetting &&
                 pendingGeneration is not null && backend.State == BackendState.Generating));
+        CommandBindings.Add(new CommandBinding(ShellCommands.ClearWindow,
+            async (_, _) => await ClearWindowAsync(), (_, e) => e.CanExecute = initialized && !closing &&
+                !resetting && pendingConnection is null && backend.State is not BackendState.Preparing));
         InitializeComponent();
         Transcript.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnTranscriptScrollChanged));
         Title = $"WinChat-Copilot {ApplicationInfo.Version}";
@@ -116,7 +121,7 @@ public partial class MainWindow : RetroWindow
 
     private async Task ConnectAsync()
     {
-        if (closing || backend.IsBusy) return;
+        if (closing || resetting || backend.IsBusy) return;
         pendingConnection = backend.ConnectAsync(lifetime.Token);
         try { await pendingConnection; }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
@@ -210,6 +215,38 @@ public partial class MainWindow : RetroWindow
         await pending;
     }
 
+    internal Task ClearWindowAsync()
+    {
+        if (!ShellCommands.ClearWindow.CanExecute(null, this)) return Task.CompletedTask;
+        resetting = true;
+        UpdateBackend();
+        var reset = ResetConversationAsync();
+        pendingReset = reset.IsCompleted ? null : reset;
+        return reset;
+    }
+
+    private async Task ResetConversationAsync()
+    {
+        try
+        {
+            await StopAsync();
+            lifetime.Token.ThrowIfCancellationRequested();
+            activeTurn = null;
+            turns.Clear();
+            followingTranscript = true;
+            ChangeTranscript(() => Transcript.Clear());
+            await backend.ResetAsync(lifetime.Token);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        catch (Exception error) when (IsBackendError(error)) { ShowError(error); }
+        finally
+        {
+            resetting = false;
+            pendingReset = null;
+            UpdateBackend();
+        }
+    }
+
     private async Task GenerateAsync(ChatTurn turn)
     {
         Task lastUpdate = Task.CompletedTask;
@@ -262,17 +299,20 @@ public partial class MainWindow : RetroWindow
         Transcript.TextWrapping = PromptInput.TextWrapping = wrapping;
         Transcript.HorizontalScrollBarVisibility = PromptInput.HorizontalScrollBarVisibility =
             backend.Settings.WordWrap ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
-        PromptInput.IsReadOnly = backend.IsBusy || pendingGeneration is not null || closing;
+        PromptInput.IsReadOnly = backend.IsBusy || pendingGeneration is not null || resetting || closing;
         BackendStatus.Text = backend.State switch
         {
             BackendState.Preparing => "Checking Copilot authentication and text-only readiness...",
             BackendState.Ready => "Copilot ready - enter a message and choose SEND.",
             BackendState.Generating => "Copilot generating - choose Stop to cancel the owned request.",
             BackendState.Cancelling => "Cancelling Copilot - waiting for owned work to settle. SEND disabled.",
-            BackendState.Failed => "Copilot failed - Connect checks the same session; no automatic retry. Review retained input before SEND.",
+            BackendState.Failed => backend.Session is null
+                ? "Copilot unavailable - new conversation preparation failed. Connect to prepare a new session; no old context or automatic retry."
+                : "Copilot failed - Connect checks the same session; no automatic retry. Review retained input before SEND.",
             _ => "Backend unavailable - not connected. Use Connect or Backend Settings."
         };
         if (closing) BackendStatus.Text = "Closing - waiting for owned Copilot work to settle...";
+        else if (resetting) BackendStatus.Text = "Clearing Window - settling old work and preparing a new conversation. SEND disabled.";
         else if (backend.State == BackendState.Ready && turns.LastOrDefault()?.State == ResponseState.Cancelled)
             BackendStatus.Text = "Request cancelled; partial text kept. Same session retained; review input before SEND (not retried).";
         CommandManager.InvalidateRequerySuggested();
@@ -289,7 +329,7 @@ public partial class MainWindow : RetroWindow
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         if (shutdownComplete) return;
-        if (!closing && pendingGeneration is null && pendingConnection is null)
+        if (!closing && pendingGeneration is null && pendingConnection is null && pendingReset is null)
         {
             closing = true;
             shutdownComplete = true;
@@ -301,7 +341,7 @@ public partial class MainWindow : RetroWindow
         closing = true;
         UpdateBackend();
         lifetime.Cancel();
-        try { await Task.WhenAll(new[] { pendingGeneration, pendingConnection }.OfType<Task>()); }
+        try { await Task.WhenAll(new[] { pendingGeneration, pendingConnection, pendingReset }.OfType<Task>()); }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         catch (Exception error) when (IsBackendError(error))
         {

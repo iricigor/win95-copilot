@@ -11,7 +11,8 @@ text areas, action surfaces and a versioned About dialog. Backend discovery,
 configuration, preference persistence and authenticated text-only readiness
 are implemented. SEND now streams a text-only chat turn into the transcript.
 Keyboard send modes, Edit actions and transcript preferences are implemented.
-Export and Clear Window remain visibly disabled until their respective tasks.
+Clear Window safely settles active work and prepares a new conversation.
+Export remains visibly disabled until its task.
 
 ### Prerequisites
 
@@ -86,7 +87,7 @@ Initial Connect prepares a session. Once a session exists, explicit Connect
 checks the same identity without retrying the user's prompt or silently
 discarding context. A failed recovery remains unavailable with an actionable
 error. Changing executables after connecting is rejected with restart guidance;
-Clear Window/new-session controls remain #12. No automatic retry occurs.
+Clear Window explicitly retires the session and prepares a fresh one. No automatic retry occurs.
 Closing during preparation cancels and settles only the owned subprocess.
 
 The CLI uses app-isolated `cli` and `work` directories beside settings so
@@ -179,8 +180,8 @@ the input as one argument without a shell. Input is read-only while generating,
 and connection/settings actions are unavailable. The original input is cleared
 only after a complete successful response; failures retain it and any partial
 assistant output, add a visible `[Failed]` marker, and display an actionable
-retro error dialog. No automatic retry occurs. Connect explicitly prepares a
-new backend session after failure; session-reset/continuity UX belongs to #12.
+retro error dialog. No automatic retry occurs. Connect explicitly verifies the
+same backend session after failure; Clear Window prepares a new conversation.
 Each turn stores submission/finish timestamps and generating/completed/failed/
 cancelled state for later transcript/export features.
 
@@ -211,7 +212,17 @@ terminated. The consciously deferred production stall/watchdog policy is
 unchanged: a silent request remains generating until Stop or Exit; test bounds
 are not production latency guarantees.
 
-Export belongs to #13; Clear Window/session reset belongs to #12. The user-approved
+File > Clear Window works while idle, generating, or cancelling. It disables SEND,
+connection changes and repeated resets, cancels and settles owned generation,
+then clears the transcript and prepares a different backend session identity.
+Unsent/cancelled input is preserved for review, not automatically submitted.
+Failed preparation leaves an empty transcript and no accepted session; Connect
+can explicitly prepare a fresh conversation but never falls back to old context.
+Exit during reset settles preparation before closing. Ordinary SEND follow-ups
+and explicit recovery continue the same session. No conversation is restored
+after application restart.
+
+Export belongs to #13. The user-approved
 real failure/stall evidence deferrals remain unchanged.
 
 Cancellation/recovery regressions cover silent/gated streams, partial/nonzero/

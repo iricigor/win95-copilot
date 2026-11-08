@@ -25,7 +25,7 @@ public static class ShellCommands
 
     public static IReadOnlyList<RoutedUICommand> Unimplemented { get; } =
     [
-        SaveTranscript, ClearWindow
+        SaveTranscript
     ];
 
     private static RoutedUICommand Create(string name) => new(name, name, typeof(ShellCommands));

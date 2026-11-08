@@ -72,6 +72,31 @@ public sealed class BackendController(SettingsStore store, BackendDiscovery disc
         generationCancellation.Cancel();
     }
 
+    public async Task ResetAsync(CancellationToken cancellationToken)
+    {
+        if (IsBusy) throw new InvalidOperationException("Wait for owned Copilot work to settle before starting a new conversation.");
+        var retiredId = Session?.Id;
+        Session = null;
+        State = BackendState.Preparing;
+        Changed?.Invoke();
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var fresh = await prepare(Discover(), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (fresh.Id == retiredId)
+                throw new InvalidOperationException("Copilot reset reused the retired conversation identity. No session was accepted; Connect to prepare a new conversation.");
+            Session = fresh;
+            State = BackendState.Ready;
+        }
+        finally
+        {
+            if (State == BackendState.Preparing)
+                State = cancellationToken.IsCancellationRequested ? BackendState.Disconnected : BackendState.Failed;
+            Changed?.Invoke();
+        }
+    }
+
     public async Task<string> SendAsync(string prompt, Action<string> onText, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(prompt))
