@@ -2,8 +2,25 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:WinChatCopilot"
                     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="RetroIcons.xaml" />
+    </ResourceDictionary.MergedDictionaries>
     <SolidColorBrush x:Key="PanelBrush" Color="#C0C0C0" />
     <SolidColorBrush x:Key="ActiveTitleBrush" Color="#000080" />
+
+    <DataTemplate x:Key="RetroActionContent">
+        <StackPanel Orientation="Horizontal">
+            <local:DecorativeIcon x:Name="Icon" Width="16" Height="16" Margin="0,0,6,0"
+                   Source="{Binding Path=(local:ButtonIcon.Source), RelativeSource={RelativeSource AncestorType=Button}}"
+                   Focusable="False" IsHitTestVisible="False" />
+            <AccessText Text="{Binding}" VerticalAlignment="Center" />
+        </StackPanel>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Button}}" Value="False">
+                <Setter TargetName="Icon" Property="Opacity" Value="0.35" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
 
     <Style x:Key="RetroButtonStyle" TargetType="ButtonBase">
         <Setter Property="Background" Value="{StaticResource PanelBrush}" />
@@ -47,7 +64,14 @@
             </Setter.Value>
         </Setter>
     </Style>
-    <Style TargetType="Button" BasedOn="{StaticResource RetroButtonStyle}" />
+    <Style TargetType="Button" BasedOn="{StaticResource RetroButtonStyle}">
+        <Setter Property="ContentTemplate" Value="{StaticResource RetroActionContent}" />
+        <Style.Triggers>
+            <Trigger Property="local:ButtonIcon.Source" Value="{x:Null}">
+                <Setter Property="ContentTemplate" Value="{x:Null}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
     <Style TargetType="RepeatButton" BasedOn="{StaticResource RetroButtonStyle}">
         <Setter Property="Padding" Value="0" />
         <Setter Property="Focusable" Value="False" />

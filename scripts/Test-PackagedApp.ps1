@@ -239,6 +239,28 @@ function Transcript {
     return $element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(-1)
 }
 function Record([string] $Name) { $results.Add([pscustomobject]@{ Check = $Name; Outcome = 'Passed'; Utc = [DateTime]::UtcNow.ToString('o') }) }
+function Assert-ActionButtons($Window, [string[]] $Names) {
+    Assert-Owned $Window
+    $condition = New-Object Windows.Automation.PropertyCondition(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
+    $buttons = $Window.FindAll([Windows.Automation.TreeScope]::Descendants, $condition)
+    foreach ($name in $Names) {
+        $matches = @($buttons | Where-Object { $_.Current.Name -eq $name })
+        Assert-True ($matches.Count -eq 1) "Expected one accessible action named $name."
+        $button = $matches[0]
+        Assert-Owned $button
+        Assert-True (-not $button.Current.IsOffscreen) "Action $name is offscreen."
+        $bounds = $button.Current.BoundingRectangle
+        $outer = $Window.Current.BoundingRectangle
+        Assert-True ($bounds.Width -gt 0 -and $bounds.Height -gt 0 -and
+            $bounds.Left -ge $outer.Left -and $bounds.Top -ge $outer.Top -and
+            $bounds.Right -le $outer.Right -and $bounds.Bottom -le $outer.Bottom) "Action $name is outside its owned window."
+        $images = $button.FindAll([Windows.Automation.TreeScope]::Descendants,
+            (New-Object Windows.Automation.PropertyCondition(
+                [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Image)))
+        Assert-True ($images.Count -eq 0) "Decorative icon on $name created duplicate screen-reader content."
+    }
+}
 function Scenario([string] $Name) {
     $work = Join-Path $script:data 'work'
     [IO.File]::WriteAllText((Join-Path $work 'chat-scenario'), $Name)
@@ -335,6 +357,7 @@ function Rename-User([string] $Name, [string] $Dismiss = 'OK') {
     Menu 'Options' 'User Name...'
     Wait-For { $null -ne (Owned-Window 'User Name') } 'user-name dialog'
     $dialog=Owned-Window 'User Name'
+    Assert-ActionButtons $dialog @('OK','Cancel')
     Set-Value (By-Id 'NameInput' $dialog) $Name
     if ($Dismiss -eq 'Enter') {
         (By-Id 'NameInput' $dialog).SetFocus()
@@ -351,6 +374,7 @@ try {
     Start-App 'main'
     Wait-For { (Status) -like 'Backend unavailable*' } 'Auto-connect off startup'
     Assert-True (-not (By-Id 'SendButton').Current.IsEnabled) 'Empty/unavailable SEND was enabled.'
+    Assert-ActionButtons $script:main @('Connect','Settings...','Help','SEND','Stop')
     $version=[Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion.Split('+')[0]
     Assert-True $script:main.Current.Name.Contains($version) 'Published title version mismatch.'
     Measure-Memory 'idle before Connect'
@@ -365,6 +389,7 @@ try {
     Menu 'Help' 'About WinChat-Copilot...'
     Wait-For { $null -ne (Owned-Window 'About WinChat-Copilot') } 'About modal'
     $about=Owned-Window 'About WinChat-Copilot'
+    Assert-ActionButtons $about @('OK')
     Assert-True ((By-Id 'VersionLabel' $about).Current.Name.Contains($version)) 'Published About version mismatch.'
     $inactive=[OwnedDesktop]::Capture($script:process.MainWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'inactive.png'))
     Assert-True ($inactive[0] -lt 100 -and $inactive[1] -gt 1000) 'Actual inactive title capture was not white rather than navy.'
@@ -384,6 +409,8 @@ try {
     $dpi=[OwnedDesktop]::GetDpiForWindow($script:process.MainWindowHandle)
     [OwnedDesktop]::Resize($script:process.MainWindowHandle,$script:process.Id,[int](520*$dpi/96),[int](340*$dpi/96))
     Assert-True (-not (By-Id 'PromptInput').Current.IsOffscreen -and -not (By-Id 'SendButton').Current.IsOffscreen) 'Resizing hid required input/actions.'
+    Assert-ActionButtons $script:main @('Connect','Settings...','Help','SEND','Stop')
+    [void][OwnedDesktop]::Capture($script:process.MainWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'minimum-icons.png'))
     [OwnedDesktop]::Resize($script:process.MainWindowHandle,$script:process.Id,1000,650)
     [OwnedDesktop]::CaptionDoubleClick($script:process.MainWindowHandle,$script:process.Id)
     Wait-For { $script:main.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern).Current.WindowVisualState -eq [Windows.Automation.WindowVisualState]::Maximized } 'native caption double-click maximize'
@@ -405,6 +432,24 @@ try {
     Menu 'Options' 'Backend Settings...'
     Wait-For { $null -ne (Owned-Window 'Backend Settings') } 'settings modal'
     $settings=Owned-Window 'Backend Settings'
+    Assert-ActionButtons $settings @('Browse...','OK','Cancel')
+    $originalPath=Get-Value (By-Id 'ExecutableInput' $settings)
+    Invoke-Element (By-Name 'Browse...' $settings)
+    Wait-For { $null -ne (Owned-Window 'Open') } 'owned native Browse dialog'
+    Keys @(0x1B) (Owned-Window 'Open')
+    Wait-For { $null -eq (Owned-Window 'Open') } 'Browse Escape cancellation'
+    Assert-True ((Get-Value (By-Id 'ExecutableInput' $settings)) -eq $originalPath) 'Browse cancellation changed the path.'
+    $cancel=By-Name 'Cancel' $settings
+    Assert-Owned $cancel
+    $cancel.SetFocus()
+    Wait-For { $cancel.Current.HasKeyboardFocus } 'dialog Cancel keyboard focus'
+    [void][OwnedDesktop]::Capture([IntPtr]$settings.Current.NativeWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'settings-icons-focused.png'))
+    Keys @(0x1B) $settings
+    Wait-For { $null -eq (Owned-Window 'Backend Settings') } 'settings Escape dismissal'
+    Menu 'Options' 'Backend Settings...'
+    Wait-For { $null -ne (Owned-Window 'Backend Settings') } 'settings reopen after Cancel'
+    $settings=Owned-Window 'Backend Settings'
+    Record 'action icon accessibility/bounds, minimum-size capture, Browse native dialog/Cancel and focused dialog icon/label capture'
     Set-Value (By-Id 'ExecutableInput' $settings) (Join-Path $EvidenceDirectory 'missing.exe')
     Invoke-Element (By-Name 'OK' $settings)
     Wait-For { -not [string]::IsNullOrWhiteSpace((By-Id 'ValidationMessage' $settings).Current.Name) } 'invalid explicit path guidance'
@@ -548,6 +593,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
     Wait-For { $null -ne (Owned-Window 'WinChat-Copilot Error') } 'actionable error modal'
     $errorWindow=Owned-Window 'WinChat-Copilot Error'
+    Assert-ActionButtons $errorWindow @('OK')
     [void][OwnedDesktop]::Capture([IntPtr]$errorWindow.Current.NativeWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'error.png'))
     Invoke-Element (By-Name 'OK' $errorWindow)
     Wait-For { $null -eq (Owned-Window 'WinChat-Copilot Error') -and $null -ne (By-Id 'Transcript') } 'error dismissal and main control restoration'

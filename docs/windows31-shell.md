@@ -33,7 +33,19 @@ Native caption buttons, glass and rounded chrome are disabled; DWM nonclient
 rendering and Windows 11 corner rounding are disabled for created windows.
 Windows 10 lacks the optional Windows 11 corner attribute; only its documented
 unsupported-attribute result is tolerated. No gradients, opacity/translucency,
-drop shadows, copied icons, or dedicated close button are used.
+drop shadows, copied icons, or dedicated close button are used. Only disabled
+decorative action icons are faded; windows remain opaque.
+
+Action buttons retain their labels and access keys alongside original 16-by-16
+geometric icons: plug (Connect), sliders (Settings), question mark (Help),
+envelope (SEND), stop sign (Stop), folder (Browse), check (OK) and cross (Cancel).
+The shared drawings use black/white, gray, navy, dark red/green and folder yellow,
+without external assets or dependencies. Backend Settings, About, Error and
+User Name use the same resources. Decorative icons are excluded from screen-reader
+control/content views and keyboard focus. Icon and label move together on press;
+disabled icons fade with gray labels and the existing focus rectangle is retained.
+Cancel buttons size to their full icon/label rather than clipping a fixed width.
+System-menu, title controls and scrollbar glyphs are unchanged.
 
 Main and About share the same chrome/system-menu/close path. The main window
 retains native caption dragging, title double-click maximize/restore and border

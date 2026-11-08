@@ -51,11 +51,13 @@
             </MenuItem>
         </Menu>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,6">
-            <Button Content="_Connect" Command="{x:Static local:ShellCommands.Connect}" Margin="0,0,6,0"
+            <Button Content="_Connect" local:ButtonIcon.Source="{StaticResource ConnectIcon}"
+                    Command="{x:Static local:ShellCommands.Connect}" Margin="0,0,6,0"
                     CommandTarget="{Binding ElementName=ShellWindow}" />
-            <Button Content="_Settings..." Command="{x:Static local:ShellCommands.ConfigureBackend}" Margin="0,0,6,0"
+            <Button Content="_Settings..." local:ButtonIcon.Source="{StaticResource SettingsIcon}"
+                    Command="{x:Static local:ShellCommands.ConfigureBackend}" Margin="0,0,6,0"
                     CommandTarget="{Binding ElementName=ShellWindow}" />
-            <Button Content="_Help" Command="{x:Static local:ShellCommands.About}"
+            <Button Content="_Help" local:ButtonIcon.Source="{StaticResource HelpIcon}" Command="{x:Static local:ShellCommands.About}"
                     CommandTarget="{Binding ElementName=ShellWindow}" />
         </StackPanel>
         <local:TranscriptView x:Name="Transcript" Grid.Row="2" Margin="8,0,8,6" IsReadOnly="True"
@@ -69,9 +71,11 @@
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                      AutomationProperties.Name="Message input" />
             <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
-                <Button x:Name="SendButton" Content="_SEND" MinWidth="80" Command="{x:Static local:ShellCommands.Send}"
+                <Button x:Name="SendButton" Content="_SEND" local:ButtonIcon.Source="{StaticResource SendIcon}"
+                        MinWidth="80" Command="{x:Static local:ShellCommands.Send}"
                         CommandTarget="{Binding ElementName=ShellWindow}" />
-                <Button x:Name="StopButton" Content="S_top" MinWidth="80" Margin="0,6,0,0"
+                <Button x:Name="StopButton" Content="S_top" local:ButtonIcon.Source="{StaticResource StopIcon}"
+                        MinWidth="80" Margin="0,6,0,0"
                         ToolTip="Cancel this request and preserve its partial response. No automatic retry."
                         Command="{x:Static local:ShellCommands.Stop}"
                         CommandTarget="{Binding ElementName=ShellWindow}" />

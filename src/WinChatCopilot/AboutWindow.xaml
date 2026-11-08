@@ -12,7 +12,8 @@
         <TextBlock Text="WinChat-Copilot" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
         <TextBlock x:Name="VersionLabel" Margin="0,8,0,0" HorizontalAlignment="Center" />
         <TextBlock Text="A Windows 3.1-style text chat companion." Margin="0,8,0,16" HorizontalAlignment="Center" />
-        <Button Content="_OK" Width="86" HorizontalAlignment="Center" IsDefault="True" IsCancel="True"
+        <Button Content="_OK" local:ButtonIcon.Source="{StaticResource ConfirmIcon}"
+                Width="86" HorizontalAlignment="Center" IsDefault="True" IsCancel="True"
                 Command="{x:Static SystemCommands.CloseWindowCommand}" />
     </StackPanel>
 </local:RetroWindow>
