@@ -51,13 +51,15 @@ area and Options. The owned settings dialog uses the same retro resources,
 supports Browse/OK/Cancel, preserves preferences and shows validation errors.
 Auto-connect is persisted and checked truthfully; connection checks are asynchronous.
 
-Save Transcript (#13), Clear Window (#12), Edit and send/wrap/timestamp options
-(#11), Send (#9) and Stop (#10) are
-visibly disabled through shared commands. There are no clickable no-op stubs or
-fake connected/ready status. The input is editable and supports ordinary text
-editing; this does not yet enable submission or implement either send shortcut.
-The transcript is read-only. Only Auto-connect is enabled as a preference;
-other controls remain disabled until their behavior is implemented.
+Save Transcript (#13) and Clear Window (#12) remain visibly disabled through
+shared commands. There are no clickable no-op stubs or fake connected/ready
+status. SEND streams through the verified backend, and Stop preserves cancelled
+partial text/input while settling owned work. Both keyboard send modes,
+focused-area Edit actions, Word Wrap and Show Timestamp are implemented.
+Preference check states survive restart; wrap/timestamp changes affect display
+without changing canonical turn data. The transcript remains read-only and
+streaming respects a user who scrolls away. See the README for exact shortcut
+and timestamp conventions.
 
 ## Automation-first verification and optional local review
 
@@ -108,5 +110,4 @@ remain blockers; missing manual review alone does not block delivery.
 
 Record actual failures as blockers rather than checking off appearance from XAML.
 Record unavailable visual/interaction evidence as non-blocking Epic limitations.
-Later tasks own generation cleanup, actual Edit menu behavior, preference
-streaming and the assembled product checklist.
+Later tasks own session reset, export and the assembled product checklist.

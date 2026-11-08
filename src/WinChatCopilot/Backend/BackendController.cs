@@ -20,7 +20,8 @@ public sealed class BackendController(SettingsStore store, BackendDiscovery disc
 
     public void Save(AppSettings settings)
     {
-        if (IsBusy) throw new InvalidOperationException("Wait for connection preparation or generation before changing settings.");
+        if (IsBusy && (settings.ExecutablePath != Settings.ExecutablePath || settings.AutoConnect != Settings.AutoConnect))
+            throw new InvalidOperationException("Wait for connection preparation or generation before changing backend settings.");
         if (settings.ExecutablePath is not null)
             BackendDiscovery.ValidateExplicit(settings.ExecutablePath);
         if (Session is not null && settings.ExecutablePath != Settings.ExecutablePath)

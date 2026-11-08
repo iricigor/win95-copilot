@@ -242,15 +242,19 @@ static async Task<int> ChatAsync(string[] arguments)
             }
         });
     Emit(new { type = "usage", data = new { content = "DIAGNOSTIC_NOT_RESPONSE" } });
-    const string first = "first \u001b[";
-    const string second = "31m\u20ac\u6f22\U0001f680\u001b[0m\r\nsecond\tline\u001b]0;hidden title\a\nthird";
+    var first = scenario == "long-stream"
+        ? string.Join("\r\n", Enumerable.Range(0, 150).Select(i => $"synthetic line {i}")) + "\r\n"
+        : "first \u001b[";
+    var second = scenario == "long-stream"
+        ? string.Join("\r\n", Enumerable.Range(150, 20).Select(i => $"synthetic line {i}"))
+        : "31m\u20ac\u6f22\U0001f680\u001b[0m\r\nsecond\tline\u001b]0;hidden title\a\nthird";
     var raw = first + second;
     if (scenario != "final-only")
     {
         var json = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = first } });
         foreach (var part in Encoding.UTF8.GetBytes(json + "\n").Chunk(7))
             await WriteBytesAsync(part);
-        if (scenario is "stream" or "partial-failure" or "stall" or "with-child") await WaitForFileAsync("chat.continue");
+        if (scenario is "stream" or "long-stream" or "partial-failure" or "stall" or "with-child") await WaitForFileAsync("chat.continue");
         var unicodeJson = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = second } },
             new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
         foreach (var part in Encoding.UTF8.GetBytes(unicodeJson + "\n").Chunk(1))

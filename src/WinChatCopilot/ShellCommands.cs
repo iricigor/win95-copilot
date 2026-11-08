@@ -10,9 +10,9 @@ public static class ShellCommands
     public static RoutedUICommand Size { get; } = Create("Size");
     public static RoutedUICommand SaveTranscript { get; } = Create("Save transcript");
     public static RoutedUICommand ClearWindow { get; } = Create("Clear window");
-    public static RoutedUICommand Copy { get; } = Create("Copy");
-    public static RoutedUICommand Paste { get; } = Create("Paste");
-    public static RoutedUICommand SelectAll { get; } = Create("Select all");
+    public static RoutedUICommand Copy { get; } = ApplicationCommands.Copy;
+    public static RoutedUICommand Paste { get; } = ApplicationCommands.Paste;
+    public static RoutedUICommand SelectAll { get; } = ApplicationCommands.SelectAll;
     public static RoutedUICommand SendWithEnter { get; } = Create("Send with Enter");
     public static RoutedUICommand SendWithControlEnter { get; } = Create("Send with Ctrl+Enter");
     public static RoutedUICommand WordWrap { get; } = Create("Word wrap");
@@ -25,8 +25,7 @@ public static class ShellCommands
 
     public static IReadOnlyList<RoutedUICommand> Unimplemented { get; } =
     [
-        SaveTranscript, ClearWindow, Copy, Paste, SelectAll, SendWithEnter,
-        SendWithControlEnter, WordWrap, ShowTimestamp
+        SaveTranscript, ClearWindow
     ];
 
     private static RoutedUICommand Create(string name) => new(name, name, typeof(ShellCommands));
