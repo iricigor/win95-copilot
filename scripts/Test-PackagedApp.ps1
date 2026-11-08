@@ -452,6 +452,7 @@ try {
     Assert-True ($null -ne $selection) 'Earlier synthetic message text was unavailable for selection.'
     $selection.Select()
     (By-Id 'PromptInput').SetFocus()
+    Wait-For { (By-Id 'PromptInput').Current.HasKeyboardFocus } 'waiting fixture initial input focus' 2
     $observed=New-Object 'System.Collections.Generic.List[int]'
     $cadence=[Diagnostics.Stopwatch]::StartNew()
     foreach($dots in @(1,2,3,4,5,1,2)) {
