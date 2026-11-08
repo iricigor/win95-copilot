@@ -84,10 +84,26 @@ keeps your reading position during streaming; return to the bottom to follow.
 Options persist send mode, wrap, timestamps, Auto-connect and executable path.
 Auto-connect is off by default and can be enabled after configuration.
 
+**Options > User Name...** sets the user heading (default `User`) in a retro
+dialog. OK trims outer whitespace and accepts Unicode and interior spaces;
+blank names, line breaks (including Unicode line/paragraph separators), tabs
+and control characters show inline guidance. There is no arbitrary short name
+limit. Cancel/Escape changes nothing; a failed save keeps the previous name and
+shows an actionable error without closing the dialog. The saved name survives
+restart and unrelated preference/backend changes.
+
+A successful save immediately renames every current user heading, including
+during streaming, and subsequent headings and exports. `Assistant` stays fixed;
+this changes presentation only, never prompts, authentication or conversation
+identity. Selection and reading position are preserved. Very long names retain
+their full text and use ordinary wrapping/horizontal scrolling within WPF's
+native layout limits.
+
 **File > Save Transcript** uses the native save/overwrite dialog and writes
 UTF-8 without a byte-order mark. Export includes speaker labels, multiline
 text, selected timestamps and explicit failed/cancelled/in-progress markers.
-It captures a snapshot before the dialog; later streamed text is not included.
+It captures a snapshot before the dialog; later streamed text or display-name
+changes are not included.
 Cancel writes nothing, and write failures leave the conversation intact.
 
 Help/About shows the application version. The left system box provides normal

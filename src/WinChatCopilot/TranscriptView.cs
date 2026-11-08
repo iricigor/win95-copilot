@@ -23,7 +23,7 @@ public sealed class TranscriptView : RichTextBox
 
     internal string Text => new TextRange(Document.ContentStart, Document.ContentEnd).Text;
 
-    internal void Update(IReadOnlyList<ChatTurn> turns, bool timestamps, int waitingDots = 0)
+    internal void Update(IReadOnlyList<ChatTurn> turns, bool timestamps, int waitingDots = 0, string userName = "User")
     {
         if (Document.Blocks.Count > turns.Count * 2) Document.Blocks.Clear();
         while (Document.Blocks.Count < turns.Count * 2)
@@ -40,9 +40,9 @@ public sealed class TranscriptView : RichTextBox
         var paragraphs = Document.Blocks.Cast<Paragraph>().ToArray();
         for (var i = 0; i < turns.Count; i++)
         {
-            UpdateMessage(paragraphs[i * 2], TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
+            UpdateMessage(paragraphs[i * 2], userName, TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
                 TranscriptDisplay.Message(turns[i].Prompt));
-            UpdateMessage(paragraphs[i * 2 + 1], TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
+            UpdateMessage(paragraphs[i * 2 + 1], "Assistant", TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
                 TranscriptDisplay.Response(turns[i]), i == turns.Count - 1 ? waitingDots : 0);
         }
         UpdatePageWidth();
@@ -58,10 +58,11 @@ public sealed class TranscriptView : RichTextBox
         UpdatePageWidth();
     }
 
-    private static void UpdateMessage(Paragraph paragraph, string timestamp, string message, int dots = 0)
+    private static void UpdateMessage(Paragraph paragraph, string speaker, string timestamp, string message, int dots = 0)
     {
         var runs = paragraph.Inlines.Cast<Run>().ToArray();
         UpdateRun(runs[0], timestamp);
+        UpdateRun(runs[1], speaker);
         UpdateRun(runs[3], dots == 0 ? "" : " " + new string('.', dots));
         UpdateRun(runs[4], dots == 0 ? " " + message : message);
     }

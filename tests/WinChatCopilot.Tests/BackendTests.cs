@@ -247,7 +247,7 @@ public class BackendTests
     {
         using var fixture = new Fixture();
         var backend = fixture.Controller();
-        var saved = new AppSettings { WordWrap = true, ShowTimestamp = true, SendMode = SendMode.Enter };
+        var saved = new AppSettings { WordWrap = true, ShowTimestamp = true, SendMode = SendMode.Enter, UserName = "synthetic name" };
         backend.Save(saved);
         var dialog = new BackendSettingsWindow(backend);
         var input = (TextBox)dialog.FindName("ExecutableInput");
