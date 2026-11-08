@@ -125,6 +125,19 @@ absolute directory. Add `-SelfContained` to bundle .NET 10 Desktop Runtime;
 otherwise users need that x64 runtime. No installer/signing/store publication
 or Copilot installation is performed. All extracted files must remain together.
 
+Folders/archives use `WinChatCopilot-<release>-win-x64-framework-dependent`
+or `WinChatCopilot-<release>-win-x64-self-contained`; each archive has its own
+matching `.sha256.json` manifest. Local invocation defaults the release version
+to the base application version and records the actual Git HEAD. CI can supply
+`-ReleaseVersion '<base>-preview.<run_number>' -SourceRevision '<full SHA>'`;
+both a matching HEAD and clean working tree are required for prereleases.
+The displayed/assembly version stays at `Directory.Build.props`' base version.
+Manifests record both versions, source SHA, UTC/SDK/runtime provenance and all
+recursive file sizes/hashes. `scripts\Test-Package.ps1 -ManifestPath '<absolute
+manifest path>'` verifies archive/file hashes, completeness and actual runtime
+deployment metadata without launching the app. Packaging invokes it before
+reporting success. This contract does not itself publish GitHub releases.
+
 `scripts\Test-PackagedApp.ps1` runs opt-in owned-window desktop checks against
 an already published executable and actual synthetic subprocess helper. It
 requires Windows PowerShell 5.1/STA for the OS UI Automation assemblies.

@@ -716,7 +716,8 @@ try {
     Menu 'File' 'Save Transcript...'
     Wait-For { $null -ne (Owned-Window 'Save Transcript') } 'native save dialog'
     $save=Owned-Window 'Save Transcript'
-    $fileInput=By-Id '1001' (By-Id 'FileNameControlHost' $save)
+    Wait-For { $null -ne (By-Id '1001' $save) } 'owned native file-name input'
+    $fileInput=By-Id '1001' $save
     $export=Join-Path $EvidenceDirectory 'export.txt'
     Set-Value $fileInput $export
     Invoke-Element (By-Name 'Save' $save)
