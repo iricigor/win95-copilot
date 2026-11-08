@@ -242,7 +242,7 @@ function Record([string] $Name) { $results.Add([pscustomobject]@{ Check = $Name;
 function Scenario([string] $Name) {
     $work = Join-Path $script:data 'work'
     [IO.File]::WriteAllText((Join-Path $work 'chat-scenario'), $Name)
-    foreach ($name in @('chat.continue','chat.started','child.pid')) {
+    foreach ($name in @('chat.continue','chat.first','chat.empty','chat.started','child.pid')) {
         $path = Join-Path $work $name
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path }
     }
@@ -320,6 +320,14 @@ function Submit([string] $Text, [string] $Mode = 'Button') {
     if ($Mode -eq 'Button') { Invoke-Element (By-Id 'SendButton') }
     else { (By-Id 'PromptInput').SetFocus(); if ($Mode -eq 'CtrlEnter') { Keys @(0x11,0x0D) } else { Keys @(0x0D) } }
     Wait-For { (Transcript).Replace("`r`n","`n").Contains($Text.Replace("`r`n","`n")) } 'accepted prompt in published transcript'
+}
+function Latest-AssistantText {
+    $text=Transcript
+    $headings=[regex]::Matches($text,'(?m)^Assistant(\.*): ')
+    if ($headings.Count -eq 0) { return '' }
+    $last=$headings[$headings.Count-1]
+    if ($last.Groups[1].Length -ne 0) { return '' }
+    return $text.Substring($last.Index+$last.Length)
 }
 
 try {
@@ -433,13 +441,48 @@ try {
     Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Actual streaming forced a scrolled-away reader to bottom.'
     $scroll.SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll,100)
     Record 'actual populated transcript scroll-away preserved/return-to-bottom'
-    Scenario 'stream'
+    Scenario 'delayed-first'
+    $before=(Requests).Count
+    Submit 'synthetic waiting dots'
+    $transcript=By-Id 'Transcript'
+    $scroll=$transcript.GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern)
+    $scroll.SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll,0)
+    $textPattern=$transcript.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern)
+    $selection=$textPattern.DocumentRange.FindText('synthetic first',$false,$false)
+    Assert-True ($null -ne $selection) 'Earlier synthetic message text was unavailable for selection.'
+    $selection.Select()
+    (By-Id 'PromptInput').SetFocus()
+    $observed=New-Object 'System.Collections.Generic.List[int]'
+    $cadence=[Diagnostics.Stopwatch]::StartNew()
+    foreach($dots in @(1,2,3,4,5,1,2)) {
+        $heading='Assistant'+('.' * $dots)+': '
+        Wait-For { (Transcript).EndsWith($heading) -or (Transcript).EndsWith($heading+"`r`n") } "waiting heading $dots dots" 2
+        $observed.Add($dots)
+        Assert-True ($textPattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Waiting tick moved message selection.'
+        Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Waiting tick forced scroll-away to bottom.'
+        Assert-True ((By-Id 'PromptInput').Current.HasKeyboardFocus) 'Waiting tick moved input focus.'
+    }
+    Assert-True ($cadence.Elapsed.TotalMilliseconds -ge 2000 -and $cadence.Elapsed.TotalMilliseconds -lt 7000) 'Waiting cycle did not follow the bounded half-second cadence.'
+    [void][OwnedDesktop]::Capture($script:process.MainWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'waiting.png'))
+    [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.first'),'continue')
+    Wait-For { (Transcript).EndsWith('Assistant: first ') -or (Transcript).EndsWith("Assistant: first `r`n") } 'first text removed waiting dots before completion'
+    Start-Sleep -Milliseconds 650
+    Assert-True ((Transcript) -notmatch 'Assistant\.+: ') 'Waiting animation restarted during a streamed-text pause.'
+    Assert-True ($textPattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'First text moved earlier message selection.'
+    Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'First text forced scroll-away to bottom.'
+    Assert-True ((Requests).Count -eq $before+1) 'Waiting animation submitted another backend request.'
+    $scroll.SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll,100)
+    [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
+    Wait-For { (Status) -like 'Copilot ready*' } 'waiting fixture completion'
+    Record 'actual waiting 1/2/3/4/5/1/2 cadence, first-text removal/no restart, selection/focus/scroll and single request'
+    Scenario 'delayed-first'
     Submit 'synthetic stop'
-    Wait-For { (Transcript).Contains('synthetic stop') -and (Status) -like 'Copilot generating*' } 'Stop fixture generating'
+    Wait-For { Test-Path -LiteralPath (Join-Path $script:data 'work\chat.empty') } 'Stop fixture waiting before text'
     Invoke-Element (By-Id 'StopButton')
     Wait-For { (Transcript).Contains('[Cancelled]') } 'cancel marker'
     Assert-True ((Get-Value (By-Id 'PromptInput')) -eq 'synthetic stop') 'Cancelled input was lost.'
-    Record 'actual Stop/cancelled marker/retained input/owned subprocess settlement'
+    Assert-True ((Transcript) -notmatch 'Assistant\.+: ') 'Stop retained waiting dots.'
+    Record 'actual Stop before first text, removed waiting dots/cancelled marker/retained input/owned subprocess settlement'
     Scenario 'partial-failure'
     Submit 'synthetic failure'
     Wait-For { (Status) -like 'Copilot generating*' } 'failure fixture generating'
@@ -544,16 +587,14 @@ try {
         Assert-True ((Status) -like 'Copilot ready*' -and ([regex]::Matches((Transcript),[regex]::Escape("Assistant: $token"))).Count -eq 2) 'Real published follow-up did not retain context.'
         Submit 'Print 300 numbered lines of harmless synthetic text, one line per number. Do not use tools.'
         Wait-For {
-            $text=Transcript
-            (Status) -like 'Copilot generating*' -and $text.Substring($text.LastIndexOf('Assistant: ')+11).Trim().Length -gt 0
+            (Status) -like 'Copilot generating*' -and (Latest-AssistantText).Trim().Length -gt 0
         } 'real published progressive output before Stop' 120
         Invoke-Element (By-Id 'StopButton')
         Wait-For { (Transcript).Contains('[Cancelled]') -and (By-Id 'PromptInput').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.IsReadOnly -eq $false } 'real published cancellation settlement' 30
         Assert-True (-not [string]::IsNullOrWhiteSpace((Get-Value (By-Id 'PromptInput')))) 'Real Stop lost original input.'
         Submit 'Print 300 more numbered lines of harmless synthetic text, one line per number. Do not use tools.'
         Wait-For {
-            $text=Transcript
-            (Status) -like 'Copilot generating*' -and $text.Substring($text.LastIndexOf('Assistant: ')+11).Trim().Length -gt 0
+            (Status) -like 'Copilot generating*' -and (Latest-AssistantText).Trim().Length -gt 0
         } 'real published progressive output before Clear Window' 120
         Menu 'File' 'Clear Window'
         Wait-For { (Status) -like 'Copilot ready*' -or $null -ne (Owned-Window 'WinChat-Copilot Error') } 'real published reset readiness' 120

@@ -215,6 +215,13 @@ supported without duplicating it. Events, raw response text and stderr each have
 a 1 MiB safety bound; this limits memory, not request duration or provider latency.
 The shared readiness/request builder retains all verified text-only restrictions.
 
+Before the first response text, the Assistant heading cycles through one to five
+dots at 500 ms intervals. First nonempty text stops the indicator immediately;
+streaming pauses do not restart it. Cancellation, failure, Clear Window and
+shutdown stop and detach the owned dispatcher timer. Dots change only the active
+heading, preserving reading selection/focus/scroll behavior, and never enter
+canonical response text or exports.
+
 Stop cancels the owned request, displays Cancelling and disables submission and
 settings until work settles. Partial output and the original input remain,
 with a visible `[Cancelled]` marker and a reminder to review input before any

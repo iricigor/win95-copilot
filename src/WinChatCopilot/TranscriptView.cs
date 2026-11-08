@@ -23,7 +23,7 @@ public sealed class TranscriptView : RichTextBox
 
     internal string Text => new TextRange(Document.ContentStart, Document.ContentEnd).Text;
 
-    internal void Update(IReadOnlyList<ChatTurn> turns, bool timestamps)
+    internal void Update(IReadOnlyList<ChatTurn> turns, bool timestamps, int waitingDots = 0)
     {
         if (Document.Blocks.Count > turns.Count * 2) Document.Blocks.Clear();
         while (Document.Blocks.Count < turns.Count * 2)
@@ -43,7 +43,16 @@ public sealed class TranscriptView : RichTextBox
                 TranscriptDisplay.Message(turns[i].Prompt));
             UpdateMessage(paragraphs[i * 2 + 1], TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
                 TranscriptDisplay.Response(turns[i]));
+            UpdateRun((Run)paragraphs[i * 2 + 1].Inlines.ElementAt(1),
+                "Assistant" + new string('.', i == turns.Count - 1 ? waitingDots : 0));
         }
+        UpdatePageWidth();
+    }
+
+    internal void UpdateWaitingIndicator(int dots)
+    {
+        if (Document.Blocks.LastBlock is not Paragraph paragraph) return;
+        UpdateRun((Run)paragraph.Inlines.ElementAt(1), "Assistant" + new string('.', dots));
         UpdatePageWidth();
     }
 

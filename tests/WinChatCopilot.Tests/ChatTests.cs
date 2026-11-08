@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Threading;
 using WinChatCopilot.Backend;
 using WinChatCopilot.Settings;
@@ -690,6 +691,198 @@ public class ChatTests
             Assert.Empty(window.Turns);
         }
         finally { if (!closed) window.Close(); }
+    });
+
+    [Fact]
+    public void WaitingDotsCycleWithoutChangingSelectionScrollDataOrExport() => OnSta(async () =>
+    {
+        using var fixture = new Fixture("delayed-first");
+        var backend = fixture.Controller();
+        var export = Path.Combine(fixture.Root, "waiting.txt");
+        var window = new MainWindow(backend, _ => export);
+        try
+        {
+            await window.InitializeBackendAsync();
+            await backend.ConnectAsync(CancellationToken.None);
+            Assert.False(window.IsWaitingForText);
+            var input = (TextBox)window.FindName("PromptInput");
+            var transcript = (TranscriptView)window.FindName("Transcript");
+            input.Text = " \r\n";
+            await window.SendAsync();
+            Assert.Empty(window.Turns);
+            Assert.Equal(0, window.WaitingDots);
+            window.Show();
+            input.Text = string.Join("\r\n", Enumerable.Range(0, 150).Select(i => $"earlier message line {i}"));
+            var prompt = input.Text;
+            var session = backend.Session;
+            var run = window.SendAsync();
+            await WaitAsync(() => File.Exists(Path.Combine(fixture.Work, "chat.empty")) && transcript.VerticalOffset > 0);
+            var turn = Assert.Single(window.Turns);
+            transcript.ScrollToVerticalOffset(100);
+            await WaitAsync(() => Math.Abs(transcript.VerticalOffset - 100) < 1);
+            var offset = transcript.VerticalOffset;
+            var user = (Paragraph)transcript.Document.Blocks.FirstBlock;
+            var body = (Run)user.Inlines.LastInline;
+            var start = body.ContentStart.GetPositionAtOffset(1)!;
+            transcript.Selection.Select(start, start.GetPositionAtOffset(7)!);
+            var selected = transcript.Selection.Text;
+            input.Focus();
+            var document = transcript.Document;
+            var assistant = (Paragraph)transcript.Document.Blocks.LastBlock;
+            var assistantBody = assistant.Inlines.LastInline;
+            // Direct ticks exercise the entire cycle without depending on OS scheduling.
+            foreach (var dots in new[] { 1, 2, 3, 4, 5, 1, 2 })
+            {
+                Assert.Equal(dots, window.WaitingDots);
+                Assert.Contains("Assistant" + new string('.', dots) + ": ", transcript.Text);
+                Assert.Equal(selected, transcript.Selection.Text);
+                Assert.True(input.IsKeyboardFocusWithin);
+                Assert.InRange(Math.Abs(transcript.VerticalOffset - offset), 0, 1);
+                Assert.Same(document, transcript.Document);
+                Assert.Same(assistantBody, assistant.Inlines.LastInline);
+                Assert.Empty(turn.Response);
+                Assert.Equal(prompt, turn.Prompt);
+                Assert.Equal(prompt, input.Text);
+                Assert.Same(session, backend.Session);
+                window.AdvanceWaitingIndicator(turn);
+            }
+            ShellCommands.ShowTimestamp.Execute(null, window);
+            Assert.Contains(TranscriptDisplay.Timestamp(turn.SubmittedAt, true) +
+                "Assistant" + new string('.', window.WaitingDots) + ": ", transcript.Text);
+            Assert.Equal(selected, transcript.Selection.Text);
+            await window.SaveTranscriptAsync();
+            Assert.Equal(TranscriptDisplay.Format(window.Turns, true, markGenerating: true), File.ReadAllText(export));
+            Assert.Contains("Assistant: [In progress]", File.ReadAllText(export));
+            File.WriteAllText(Path.Combine(fixture.Work, "chat.first"), "");
+            await WaitAsync(() => turn.Response == "first ");
+            Assert.False(window.IsWaitingForText);
+            Assert.Equal(0, window.WaitingDots);
+            Assert.Contains("Assistant: first ", transcript.Text);
+            window.AdvanceWaitingIndicator(turn);
+            Assert.Equal(0, window.WaitingDots);
+            Assert.Equal(selected, transcript.Selection.Text);
+            Assert.True(input.IsKeyboardFocusWithin);
+            Assert.InRange(Math.Abs(transcript.VerticalOffset - offset), 0, 1);
+            await window.SaveTranscriptAsync();
+            Assert.Equal(TranscriptDisplay.Format(window.Turns, true, markGenerating: true), File.ReadAllText(export));
+            transcript.ScrollToEnd();
+            await WaitAsync(() => transcript.VerticalOffset >= transcript.ExtentHeight - transcript.ViewportHeight - 1);
+            File.WriteAllText(Path.Combine(fixture.Work, "chat.continue"), "");
+            await run;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.True(transcript.VerticalOffset >= transcript.ExtentHeight - transcript.ViewportHeight - 1);
+            Assert.Equal(CleanResponse, turn.Response);
+            Assert.Equal(TranscriptDisplay.Format(window.Turns, true), transcript.Text);
+            Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void LiveWaitingTimerUsesHalfSecondCadenceAndStopsOnWhitespaceText() => OnSta(async () =>
+    {
+        using var fixture = new Fixture("whitespace-first");
+        var backend = fixture.Controller();
+        var window = new MainWindow(backend);
+        try
+        {
+            await window.InitializeBackendAsync();
+            await backend.ConnectAsync(CancellationToken.None);
+            ((TextBox)window.FindName("PromptInput")).Text = "synthetic cadence";
+            var watch = Stopwatch.StartNew();
+            var run = window.SendAsync();
+            Assert.Equal(1, window.WaitingDots);
+            await WaitAsync(() => window.WaitingDots == 2);
+            Assert.InRange(watch.Elapsed.TotalMilliseconds, 350, 2500);
+            var responsive = false;
+            await window.Dispatcher.InvokeAsync(() => responsive = true);
+            Assert.True(responsive);
+            Assert.Empty(window.Turns[0].Response);
+            File.WriteAllText(Path.Combine(fixture.Work, "chat.first"), "");
+            await WaitAsync(() => window.Turns[0].Response == " ");
+            Assert.False(window.IsWaitingForText);
+            Assert.Equal(0, window.WaitingDots);
+            var transcript = (TranscriptView)window.FindName("Transcript");
+            Assert.Contains("Assistant:  ", transcript.Text);
+            window.AdvanceWaitingIndicator(window.Turns[0]);
+            Assert.Equal(0, window.WaitingDots);
+            File.WriteAllText(Path.Combine(fixture.Work, "chat.continue"), "");
+            await run;
+            Assert.Equal(" text", window.Turns[0].Response);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData("stop", "delayed-first", ResponseState.Cancelled)]
+    [InlineData("clear", "delayed-first", ResponseState.Cancelled)]
+    [InlineData("close", "delayed-first", ResponseState.Cancelled)]
+    [InlineData("failure", "delayed-failure", ResponseState.Failed)]
+    [InlineData("empty", "empty", ResponseState.Failed)]
+    [InlineData("final", "delayed-final", ResponseState.Completed)]
+    public void WaitingCleanupAndRetiredTicksCannotAffectNextTurn(
+        string operation, string scenario, ResponseState expected) => OnSta(async () =>
+    {
+        using var fixture = new Fixture(scenario);
+        var backend = fixture.Controller();
+        var window = new MainWindow(backend);
+        var closed = false;
+        window.Closed += (_, _) => closed = true;
+        var errors = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+        errors.Tick += (_, _) =>
+        {
+            foreach (var error in window.OwnedWindows.OfType<ErrorWindow>().ToArray()) error.Close();
+        };
+        errors.Start();
+        try
+        {
+            await window.InitializeBackendAsync();
+            window.Show();
+            await backend.ConnectAsync(CancellationToken.None);
+            ((TextBox)window.FindName("PromptInput")).Text = "synthetic terminal path";
+            var run = window.SendAsync();
+            await WaitAsync(() => File.Exists(Path.Combine(fixture.Work, "chat.empty")));
+            var old = Assert.Single(window.Turns);
+            Assert.True(window.IsWaitingForText);
+            using var owned = Process.GetProcessById(int.Parse(File.ReadAllText(Path.Combine(fixture.Work, "chat.started"))));
+            if (operation == "stop")
+            {
+                var stop = window.StopAsync();
+                Assert.False(window.IsWaitingForText);
+                await stop;
+            }
+            else if (operation == "clear") await window.ClearWindowAsync();
+            else if (operation == "close") window.Close();
+            else File.WriteAllText(Path.Combine(fixture.Work, "chat.first"), "");
+            await run;
+            if (operation == "close") await WaitAsync(() => closed);
+            Assert.True(owned.HasExited);
+            Assert.False(window.IsWaitingForText);
+            Assert.Equal(0, window.WaitingDots);
+            Assert.Equal(expected, old.State);
+            Assert.Equal(operation == "final" ? CleanResponse : "", old.Response);
+            var transcript = (TranscriptView)window.FindName("Transcript");
+            Assert.DoesNotContain("Assistant.", transcript.Text);
+            if (operation == "clear") Assert.Empty(transcript.Text);
+            window.AdvanceWaitingIndicator(old);
+            Assert.Equal(0, window.WaitingDots);
+            if (closed) return;
+            if (backend.State != BackendState.Ready) await backend.ConnectAsync(CancellationToken.None);
+            File.WriteAllText(Path.Combine(fixture.Work, "chat-scenario"), "delayed-first");
+            File.Delete(Path.Combine(fixture.Work, "chat.first"));
+            File.Delete(Path.Combine(fixture.Work, "chat.empty"));
+            ((TextBox)window.FindName("PromptInput")).Text = "new explicit request";
+            var next = window.SendAsync();
+            Assert.Equal(1, window.WaitingDots);
+            window.AdvanceWaitingIndicator(old);
+            Assert.Equal(1, window.WaitingDots);
+            await WaitAsync(() => File.Exists(Path.Combine(fixture.Work, "chat.empty")));
+            await window.StopAsync();
+            await next;
+            Assert.False(window.IsWaitingForText);
+            Assert.Equal(2, File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")).Length);
+        }
+        finally { errors.Stop(); if (!closed) window.Close(); }
     });
 
     private static async Task WaitAsync(Func<bool> condition)
