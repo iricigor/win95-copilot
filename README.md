@@ -7,9 +7,10 @@ unpackaged Windows executable, XAML controls, and ordinary Windows keyboard and
 window behavior without requiring the Windows App SDK. Its styling and window
 customization support the Windows 3.1 shell without Windows App SDK packaging.
 The reference-led [Windows 3.1 shell](docs/windows31-shell.md) supplies menus,
-text areas, action surfaces and a versioned About dialog. Chat features, Copilot
-processes and service calls are not implemented yet; their actions remain
-visibly disabled with a truthful unavailable status.
+text areas, action surfaces and a versioned About dialog. Backend discovery,
+configuration, preference persistence and authenticated text-only readiness
+are implemented. User chat/streaming, export and transcript controls remain
+visibly disabled until their respective tasks.
 
 ### Prerequisites
 
@@ -52,6 +53,43 @@ The scaffold tests load window resources on a dedicated STA thread without
 showing a window and verify the displayed version against generated metadata.
 The deterministic fake-CLI suite and Windows CI are described below. Neither
 requires Copilot installation, authentication, or service access.
+
+### Backend configuration and preferences
+
+Settings/Options > Backend Settings accepts an absolute executable path or a
+blank field for automatic discovery. Discovery takes the first `copilot.exe`
+on PATH (quoted entries supported), then checks GitHub.Copilot portable-package
+directories in the documented default WinGet user/machine package roots.
+Custom installations require PATH or explicit selection. An invalid explicit
+path is never silently replaced. The [installation evidence and readiness
+contract](docs/copilot-cli-contract.md#application-discovery-and-readiness)
+describe the supported version and limits.
+
+Preferences live in `%LOCALAPPDATA%\WinChatCopilot\settings.json`. Defaults:
+Ctrl+Enter send mode, Word Wrap off, Auto-connect off, Show Timestamp off,
+automatic executable discovery. Auto-connect is the only preference wired to
+application behavior in this task; input/wrap/timestamp actions remain disabled
+until #11. Backend Settings preserves these other saved fields. Corrupt,
+unreadable and unwritable files produce actionable errors; writes replace the
+previous file only after the new document has been written successfully.
+No credentials are collected or saved.
+
+With Auto-connect off, startup still discovers the backend and shows configuration
+guidance when it is missing/invalid, but performs no service request. Connect
+manually checks the bundled version, then sends one small synthetic text-only
+readiness request using existing CLI authentication. Auto-connect performs the
+same check at startup. Readiness requires a successful service response, matching
+new session identity and zero-tool evidence, not just installation or `gh` login.
+It does not imply permanent connectivity, and user-chat Send remains disabled.
+Each explicit reconnect prepares a fresh session; no automatic retry occurs.
+Closing during preparation cancels and settles only the owned subprocess.
+
+The CLI uses app-isolated `cli` and `work` directories beside settings so
+readiness does not load or modify the user's CLI settings/conversations.
+Existing OS-stored CLI authentication or supported inherited token environment
+variables must already be available; authenticate separately if needed.
+`WINCHAT_DATA_DIRECTORY` can select an absolute isolated app-data directory for
+tests; it must never point at real user data during automated verification.
 
 ### Project layout and version
 
@@ -110,6 +148,13 @@ inference timeout policy**. Tree termination uses .NET's owned process handle
 while the parent is alive; detached/reparented children are not a guaranteed
 supported backend contract. Do not use process-name kills.
 
+`BackendTests` adds isolated executable/PATH/WinGet-root discovery, complete
+preference round trips and invalid/locked/read-only settings, actual fake-CLI
+readiness subprocesses (including malformed/version/auth/tool/session failures),
+owned cancellation, startup Auto-connect/manual reconnect, and bounded STA
+startup/settings command/dialog checks. These synthetic tests run in the same
+Windows CI without real credentials or inference; they are not real CLI evidence.
+
 `.github\workflows\windows-tests.yml` runs these commands for PRs and `main`
 pushes on `windows-latest` with .NET 10, read-only repository permissions, a
 ten-minute job bound, and two-minute test-host hang diagnostics. The test step
@@ -150,8 +195,9 @@ windows or change real user settings/conversations. Close owned helpers afterwar
 
 The [Copilot CLI contract investigation](docs/copilot-cli-contract.md) records
 real streaming/session/text-only/cancellation evidence for the tested bundled
-CLI and consciously deferred stall/error improvements agreed on Epic #1. The application scaffold
-does not yet integrate Copilot. `scripts\Test-RealCopilot.ps1` requires an explicit
+CLI and consciously deferred stall/error improvements agreed on Epic #1.
+The app now implements readiness only, not user-chat integration.
+`scripts\Test-RealCopilot.ps1` requires an explicit
 real-service opt-in and existing local authentication; it is not a routine CI
 test; a passing smoke run does not claim the deferred improvements or the full
 application are implemented.

@@ -96,7 +96,9 @@ public class ShellTests
                 Assert.Contains("_", (string)item.Header);
                 item.CommandTarget = window;
                 Assert.Equal(item.Command == ShellCommands.About ||
-                    item.Command == SystemCommands.CloseWindowCommand, item.IsEnabled);
+                    item.Command == SystemCommands.CloseWindowCommand, ((RoutedCommand)item.Command).CanExecute(null, window));
+                if (ShellCommands.Unimplemented.Contains(item.Command))
+                    Assert.False(item.IsEnabled);
             });
             Assert.Same(ShellCommands.Send, ((Button)window.FindName("SendButton")).Command);
             Assert.Same(ShellCommands.Stop, ((Button)window.FindName("StopButton")).Command);
@@ -155,6 +157,28 @@ public class ShellTests
             window.Closed += (_, _) => closed = true;
             SystemCommands.CloseWindowCommand.Execute(null, window);
             Assert.True(closed);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void ErrorDialogLoadsSharedChromeAndScrollableDiagnostic() => OnSta(() =>
+    {
+        var window = new ErrorWindow("Synthetic actionable diagnostic.");
+        try
+        {
+            window.ApplyTemplate();
+            Assert.Equal(ResizeMode.NoResize, window.ResizeMode);
+            Assert.False(window.ShowInTaskbar);
+            var panel = (StackPanel)window.Content;
+            var scroll = Assert.Single(panel.Children.OfType<ScrollViewer>());
+            Assert.Equal(ScrollBarVisibility.Auto, scroll.VerticalScrollBarVisibility);
+            Assert.Equal("Synthetic actionable diagnostic.", ((TextBlock)scroll.Content).Text);
+            var ok = Assert.Single(panel.Children.OfType<Button>());
+            Assert.True(ok.IsDefault);
+            Assert.True(ok.IsCancel);
+            Assert.NotNull(window.Template.FindName("SystemMenuButton", window));
+            Assert.Null(window.Template.FindName("CloseButton", window));
         }
         finally { window.Close(); }
     });
