@@ -218,12 +218,20 @@ public class PackagingTests
         public string Output => Path.Combine(directory, "output");
         public string Invocations => Path.Combine(directory, "invocations.txt");
         public string Head { get; private set; } = "";
+        private string Git { get; set; } = "";
 
         public static async Task<PackageFixture> Create(string mode = "success")
         {
             var fixture = new PackageFixture();
             try
             {
+                fixture.Git = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+                    .Select(path => Path.Combine(path.Trim('"'), "git.exe"))
+                    .Concat([
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "cmd", "git.exe"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Git", "cmd", "git.exe")
+                    ]).FirstOrDefault(File.Exists) ?? throw new FileNotFoundException(
+                        "Package provenance regressions require Git on PATH or in its standard Windows installation.");
                 Directory.CreateDirectory(Path.Combine(fixture.Repo, "scripts"));
                 Directory.CreateDirectory(Path.Combine(fixture.Repo, "docs"));
                 foreach (var script in new[] { "Publish-App.ps1", "Test-Package.ps1" })
@@ -268,10 +276,10 @@ public class PackagingTests
                                  "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "Synthetic package source" }
                          })
                 {
-                    var result = await RunProcess("git", fixture.Repo, arguments);
+                    var result = await RunProcess(fixture.Git, fixture.Repo, arguments);
                     Assert.True(result.Exit == 0, result.Error);
                 }
-                var head = await RunProcess("git", fixture.Repo, ["rev-parse", "HEAD"]);
+                var head = await RunProcess(fixture.Git, fixture.Repo, ["rev-parse", "HEAD"]);
                 Assert.True(head.Exit == 0, head.Error);
                 fixture.Head = head.Output.Trim();
                 return fixture;
@@ -281,7 +289,8 @@ public class PackagingTests
 
         public Task<(int Exit, string Error)> Publish(params string[] arguments) =>
             RunScript(Path.Combine(Repo, "scripts", "Publish-App.ps1"),
-                new[] { "-OutputDirectory", Output, "-DotnetPath", Path.Combine(directory, "dotnet.ps1") }.Concat(arguments).ToArray());
+                new[] { "-OutputDirectory", Output, "-DotnetPath", Path.Combine(directory, "dotnet.ps1") }.Concat(arguments).ToArray(),
+                Path.GetDirectoryName(Git));
 
         public void Dispose()
         {
@@ -292,7 +301,7 @@ public class PackagingTests
         }
     }
 
-    private static async Task<(int Exit, string Error)> RunScript(string script, string[] arguments)
+    private static async Task<(int Exit, string Error)> RunScript(string script, string[] arguments, string? gitDirectory = null)
     {
         var powershell = new[]
         {
@@ -302,13 +311,16 @@ public class PackagingTests
             "Packaging script regressions require PowerShell 7 in its standard installation or app-execution-alias location.");
         var path = Path.IsPathFullyQualified(script) ? script : Path.Combine(AppContext.BaseDirectory, "Scripts", script);
         var result = await RunProcess(powershell, AppContext.BaseDirectory,
-            new[] { "-NoProfile", "-NonInteractive", "-File", path }.Concat(arguments).ToArray());
+            new[] { "-NoProfile", "-NonInteractive", "-File", path }.Concat(arguments).ToArray(), gitDirectory);
         return (result.Exit, result.Error);
     }
 
-    private static async Task<(int Exit, string Error, string Output)> RunProcess(string executable, string workingDirectory, string[] arguments)
+    private static async Task<(int Exit, string Error, string Output)> RunProcess(string executable, string workingDirectory, string[] arguments,
+        string? gitDirectory = null)
     {
         var info = new ProcessStartInfo(executable) { WorkingDirectory = workingDirectory };
+        if (gitDirectory is not null)
+            info.Environment["PATH"] = gitDirectory + Path.PathSeparator + info.Environment["PATH"];
         foreach (var argument in arguments)
             info.ArgumentList.Add(argument);
         var error = new StringBuilder();
