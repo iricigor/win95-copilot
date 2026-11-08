@@ -7,16 +7,26 @@ namespace WinChatCopilot;
 
 internal static class TranscriptExport
 {
-    internal static SaveFileDialog CreateDialog() => new()
+    internal static SaveFileDialog CreateDialog()
     {
-        Title = "Save Transcript",
-        Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-        DefaultExt = ".txt",
-        AddExtension = true,
-        FileName = "Transcript.txt",
-        CheckPathExists = true,
-        OverwritePrompt = true
-    };
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save Transcript",
+            Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            DefaultExt = ".txt",
+            AddExtension = true,
+            FileName = "Transcript.txt",
+            CheckPathExists = true,
+            OverwritePrompt = true
+        };
+        if (Environment.GetEnvironmentVariable("WINCHAT_DATA_DIRECTORY") is { } isolatedDirectory)
+        {
+            dialog.InitialDirectory = isolatedDirectory;
+            dialog.AddToRecent = false;
+            dialog.ClientGuid = Guid.NewGuid();
+        }
+        return dialog;
+    }
 
     internal static string? SelectPath(Window owner)
     {

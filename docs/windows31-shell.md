@@ -51,7 +51,7 @@ area and Options. The owned settings dialog uses the same retro resources,
 supports Browse/OK/Cancel, preserves preferences and shows validation errors.
 Auto-connect is persisted and checked truthfully; connection checks are asynchronous.
 
-Save Transcript (#13) and Clear Window (#12) remain visibly disabled through
+Save Transcript (#13) and Clear Window (#12) are implemented through
 shared commands. There are no clickable no-op stubs or fake connected/ready
 status. SEND streams through the verified backend, and Stop preserves cancelled
 partial text/input while settling owned work. Both keyboard send modes,
@@ -99,8 +99,8 @@ remain blockers; missing manual review alone does not block delivery.
    modality, Enter, Escape and OK independently.
 3. Open each File/Edit/Options/Help menu with the mouse, then with Alt+F/E/O/H,
    arrow keys and Escape. Inspect square, white/black popup borders and navy
-   selection. Check mnemonic actions for Exit/About. All future actions must be
-   visibly gray and must not execute through mouse or keyboard.
+   selection. Check mnemonic actions for Exit/About and truthful disabled
+   states for unavailable/busy actions.
 4. Click the system box, then use Alt+Space: Restore/Move/Size/Minimize/Maximize/
    Close must have truthful state. Exercise keyboard Move/Size, caption dragging,
    minimize/restore, maximize/restore, title double-click, and edge/corner resizing.
@@ -116,4 +116,5 @@ remain blockers; missing manual review alone does not block delivery.
 
 Record actual failures as blockers rather than checking off appearance from XAML.
 Record unavailable visual/interaction evidence as non-blocking Epic limitations.
-Later tasks own session reset, export and the assembled product checklist.
+Session reset and export are implemented; the packaging verification guide maps
+assembled-product coverage and limitations.

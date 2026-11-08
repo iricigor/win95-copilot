@@ -22,6 +22,8 @@ File > Save Transcript exports the current conversation as UTF-8 plain text.
   .NET does not extend the operating system's lifecycle.
 - The latest serviced **.NET 10 SDK** for development and tests. `global.json`
   accepts stable 10.0 SDK feature bands starting at 10.0.100.
+- **PowerShell 7** for publishing and opt-in/safe-output script regressions
+  (standard installation or Windows app-execution alias; included on Windows CI).
 - The **.NET 10 Desktop Runtime** for running a framework-dependent build on a
   machine without the SDK. The SDK includes the development/runtime components.
 - Internet access to NuGet for the first test dependency restore. Copilot
@@ -96,6 +98,23 @@ Existing OS-stored CLI authentication or supported inherited token environment
 variables must already be available; authenticate separately if needed.
 `WINCHAT_DATA_DIRECTORY` can select an absolute isolated app-data directory for
 tests; it must never point at real user data during automated verification.
+
+### Distribution and packaged verification
+
+The [user guide](docs/user-guide.md) documents extraction, Windows/runtime/CLI
+prerequisites, authentication, menus, local data and truthful limitations.
+`scripts\Publish-App.ps1 -OutputDirectory 'C:\builds\winchat-0.1.0'` produces a
+Release/win-x64 framework-dependent folder, zip and SHA-256 manifest in a new
+absolute directory. Add `-SelfContained` to bundle .NET 10 Desktop Runtime;
+otherwise users need that x64 runtime. No installer/signing/store publication
+or Copilot installation is performed. All extracted files must remain together.
+
+`scripts\Test-PackagedApp.ps1` runs opt-in owned-window desktop checks against
+an already published executable and actual synthetic subprocess helper. It
+requires Windows PowerShell 5.1/STA for the OS UI Automation assemblies.
+Results distinguish actual packaged interaction from deterministic/resource
+tests and real-service evidence. See [packaged verification](docs/packaged-verification.md)
+for commands, coverage and revision-specific evidence expectations.
 
 ### Project layout and version
 

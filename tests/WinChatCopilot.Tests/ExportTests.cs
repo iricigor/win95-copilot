@@ -147,6 +147,24 @@ public class ExportTests
     }
 
     [Fact]
+    public void IsolatedNativeDialogDoesNotReuseNormalDialogHistoryOrRecentFiles()
+    {
+        var previous = Environment.GetEnvironmentVariable("WINCHAT_DATA_DIRECTORY");
+        var isolated = Path.Combine(Path.GetTempPath(), "winchat-dialog-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Environment.SetEnvironmentVariable("WINCHAT_DATA_DIRECTORY", isolated);
+            var first = TranscriptExport.CreateDialog();
+            var second = TranscriptExport.CreateDialog();
+            Assert.Equal(isolated, first.InitialDirectory);
+            Assert.False(first.AddToRecent);
+            Assert.NotEqual(Guid.Empty, first.ClientGuid);
+            Assert.NotEqual(first.ClientGuid, second.ClientGuid);
+        }
+        finally { Environment.SetEnvironmentVariable("WINCHAT_DATA_DIRECTORY", previous); }
+    }
+
+    [Fact]
     public void NativeDialogUsesTextDefaultValidPathAndOverwriteConfirmation()
     {
         var dialog = TranscriptExport.CreateDialog();
