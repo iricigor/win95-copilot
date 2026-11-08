@@ -14,7 +14,8 @@
         </Grid.RowDefinitions>
         <Menu x:Name="MainMenu">
             <MenuItem Header="_File">
-                <MenuItem Header="_Save Transcript..." IsEnabled="False" Command="{x:Static local:ShellCommands.SaveTranscript}" />
+                <MenuItem Header="_Save Transcript..." Command="{x:Static local:ShellCommands.SaveTranscript}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
                 <MenuItem Header="_Clear Window" Command="{x:Static local:ShellCommands.ClearWindow}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
                 <Separator />

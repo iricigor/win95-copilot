@@ -23,10 +23,7 @@ public static class ShellCommands
     public static RoutedUICommand Send { get; } = Create("Send");
     public static RoutedUICommand Stop { get; } = Create("Stop");
 
-    public static IReadOnlyList<RoutedUICommand> Unimplemented { get; } =
-    [
-        SaveTranscript
-    ];
+    public static IReadOnlyList<RoutedUICommand> Unimplemented { get; } = [];
 
     private static RoutedUICommand Create(string name) => new(name, name, typeof(ShellCommands));
 }
