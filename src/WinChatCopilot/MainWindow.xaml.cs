@@ -12,6 +12,7 @@ namespace WinChatCopilot;
 public partial class MainWindow : RetroWindow
 {
     private readonly BackendController backend;
+    private readonly Func<Window, string?> selectTranscriptPath;
     private readonly CancellationTokenSource lifetime = new();
     private bool closing;
     private bool shutdownComplete;
@@ -21,6 +22,8 @@ public partial class MainWindow : RetroWindow
     private Task? pendingConnection;
     private Task? pendingGeneration;
     private Task? pendingReset;
+    private Task? pendingExport;
+    private bool savingTranscript;
     private bool resetting;
     private bool followingTranscript = true;
     private bool updatingTranscript;
@@ -29,9 +32,12 @@ public partial class MainWindow : RetroWindow
 
     public MainWindow() : this(CreateBackend()) { }
 
-    public MainWindow(BackendController backend)
+    public MainWindow(BackendController backend) : this(backend, TranscriptExport.SelectPath) { }
+
+    internal MainWindow(BackendController backend, Func<Window, string?> selectTranscriptPath)
     {
         this.backend = backend;
+        this.selectTranscriptPath = selectTranscriptPath;
         foreach (var command in ShellCommands.Unimplemented)
             CommandBindings.Add(new CommandBinding(command, null, (_, e) => e.CanExecute = false));
         CommandBindings.Add(new CommandBinding(ShellCommands.About,
@@ -67,6 +73,9 @@ public partial class MainWindow : RetroWindow
         CommandBindings.Add(new CommandBinding(ShellCommands.ClearWindow,
             async (_, _) => await ClearWindowAsync(), (_, e) => e.CanExecute = initialized && !closing &&
                 !resetting && pendingConnection is null && backend.State is not BackendState.Preparing));
+        CommandBindings.Add(new CommandBinding(ShellCommands.SaveTranscript,
+            async (_, _) => await SaveTranscriptAsync(), (_, e) => e.CanExecute = initialized && !closing &&
+                !resetting && !savingTranscript));
         InitializeComponent();
         Transcript.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnTranscriptScrollChanged));
         Title = $"WinChat-Copilot {ApplicationInfo.Version}";
@@ -191,6 +200,34 @@ public partial class MainWindow : RetroWindow
 
     private void AppendTranscript(string text) => ChangeTranscript(() => Transcript.AppendText(text));
 
+    internal Task SaveTranscriptAsync()
+    {
+        if (!ShellCommands.SaveTranscript.CanExecute(null, this)) return Task.CompletedTask;
+        var snapshot = TranscriptDisplay.Format(turns, backend.Settings.ShowTimestamp, markGenerating: true);
+        savingTranscript = true;
+        UpdateBackend();
+        return pendingExport = ExportAsync(snapshot);
+    }
+
+    private async Task ExportAsync(string snapshot)
+    {
+        await System.Windows.Threading.Dispatcher.Yield();
+        try
+        {
+            lifetime.Token.ThrowIfCancellationRequested();
+            var path = selectTranscriptPath(this);
+            if (path is not null) await TranscriptExport.WriteAsync(path, snapshot, lifetime.Token);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        catch (Exception error) when (IsBackendError(error)) { ShowError(error); }
+        finally
+        {
+            savingTranscript = false;
+            pendingExport = null;
+            UpdateBackend();
+        }
+    }
+
     internal Task SendAsync()
     {
         if (!ShellCommands.Send.CanExecute(null, this)) return Task.CompletedTask;
@@ -251,6 +288,7 @@ public partial class MainWindow : RetroWindow
     {
         Task lastUpdate = Task.CompletedTask;
         Exception? failure = null;
+        var finalState = ResponseState.Completed;
         try
         {
             await backend.SendAsync(turn.Prompt, chunk =>
@@ -262,21 +300,21 @@ public partial class MainWindow : RetroWindow
                     AppendTranscript(chunk);
                 }).Task;
             }, lifetime.Token);
-            turn.State = ResponseState.Completed;
         }
         catch (OperationCanceledException) when (stopRequested || lifetime.IsCancellationRequested)
         {
-            turn.State = ResponseState.Cancelled;
+            finalState = ResponseState.Cancelled;
         }
         catch (Exception error) when (IsBackendError(error))
         {
-            turn.State = ResponseState.Failed;
+            finalState = ResponseState.Failed;
             turn.Error = error.Message;
             failure = error;
         }
         finally
         {
             await lastUpdate;
+            turn.State = finalState;
             turn.FinishedAt = DateTimeOffset.Now;
             AppendTranscript(TranscriptDisplay.Ending(turn.State));
             if (turn.State == ResponseState.Completed) PromptInput.Clear();
@@ -329,7 +367,7 @@ public partial class MainWindow : RetroWindow
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         if (shutdownComplete) return;
-        if (!closing && pendingGeneration is null && pendingConnection is null && pendingReset is null)
+        if (!closing && pendingGeneration is null && pendingConnection is null && pendingReset is null && pendingExport is null)
         {
             closing = true;
             shutdownComplete = true;
@@ -341,7 +379,7 @@ public partial class MainWindow : RetroWindow
         closing = true;
         UpdateBackend();
         lifetime.Cancel();
-        try { await Task.WhenAll(new[] { pendingGeneration, pendingConnection, pendingReset }.OfType<Task>()); }
+        try { await Task.WhenAll(new[] { pendingGeneration, pendingConnection, pendingReset, pendingExport }.OfType<Task>()); }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         catch (Exception error) when (IsBackendError(error))
         {

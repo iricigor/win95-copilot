@@ -12,7 +12,7 @@ configuration, preference persistence and authenticated text-only readiness
 are implemented. SEND now streams a text-only chat turn into the transcript.
 Keyboard send modes, Edit actions and transcript preferences are implemented.
 Clear Window safely settles active work and prepares a new conversation.
-Export remains visibly disabled until its task.
+File > Save Transcript exports the current conversation as UTF-8 plain text.
 
 ### Prerequisites
 
@@ -222,8 +222,7 @@ Exit during reset settles preparation before closing. Ordinary SEND follow-ups
 and explicit recovery continue the same session. No conversation is restored
 after application restart.
 
-Export belongs to #13. The user-approved
-real failure/stall evidence deferrals remain unchanged.
+The user-approved real failure/stall evidence deferrals remain unchanged.
 
 Cancellation/recovery regressions cover silent/gated streams, partial/nonzero/
 synthetic authentication failures, same-session explicit recovery, no duplicate
@@ -297,6 +296,29 @@ the app's owned windows on the local interactive desktop. Verify CLI access,
 version and authenticated readiness rather than assuming success. Do not request
 routine renewed consent, inspect/change credentials, interact with unrelated
 windows or change real user settings/conversations. Close owned helpers afterward.
+
+## Transcript export
+
+File > Save Transcript... opens the native save dialog with a `.txt` default
+and normal overwrite confirmation. Empty conversations export an empty file.
+The export captures the canonical current conversation and Show Timestamp
+preference before opening the dialog, so output received while choosing a path
+does not change that snapshot. Speaker labels, Unicode, multiline text and
+partial responses are preserved; failed and cancelled responses retain their
+display markers, and unfinished responses are explicitly marked `[In progress]`.
+Clear Window removes retired history from subsequent exports. Unsent input is
+not part of the conversation and is not exported.
+
+Cancelling the dialog writes nothing. UTF-8 output has no byte-order mark.
+Writing uses a temporary sibling file and replaces the selected destination
+only after the complete snapshot is written; failures produce the retro
+actionable error dialog without changing the chat. File I/O is asynchronous,
+streaming can continue, and a second save is disabled until the first settles.
+Exit cancels and settles an active export before closing.
+
+`ExportTests` covers exact formatting/state/snapshot/reset behavior, UTF-8
+bytes, overwrite/cancellation/write failures, and native dialog configuration
+and command/path-selection integration without Copilot credentials.
 
 ## Opt-in real CLI investigation
 
