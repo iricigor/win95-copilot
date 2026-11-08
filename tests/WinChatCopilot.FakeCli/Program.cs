@@ -81,6 +81,8 @@ switch (scenario)
                 Console.WriteLine(scenario == "version" ? "GitHub Copilot CLI 9.9.9." : "GitHub Copilot CLI 1.0.81.");
                 return 0;
             }
+            if (arguments[^1] != "Connection check only. Reply with READY. Do not use tools.")
+                return await ChatAsync(arguments);
             File.WriteAllText("readiness.arguments.json", JsonSerializer.Serialize(arguments));
             File.WriteAllText("readiness.home", Environment.GetEnvironmentVariable("COPILOT_HOME"));
             File.WriteAllText("readiness.started.pending", Environment.ProcessId.ToString());
@@ -119,7 +121,9 @@ switch (scenario)
             }));
             Console.WriteLine(JsonSerializer.Serialize(new
             {
-                type = "result", sessionId = scenario == "session" ? Guid.NewGuid().ToString() : session, exitCode = 0
+                type = "result",
+                sessionId = scenario == "session" ? Guid.NewGuid().ToString() : session,
+                exitCode = 0
             }));
             return 0;
         }
@@ -183,5 +187,105 @@ static async Task WaitForFileAsync(string path)
     while (!File.Exists(path))
     {
         await Task.Delay(20, timeout.Token);
+    }
+
+}
+
+static async Task<int> ChatAsync(string[] arguments)
+{
+    var scenario = File.Exists("chat-scenario") ? File.ReadAllText("chat-scenario") : "complete";
+    File.WriteAllText("chat.arguments.json", JsonSerializer.Serialize(arguments));
+    File.WriteAllText("chat.started.pending", Environment.ProcessId.ToString());
+    File.Move("chat.started.pending", "chat.started", overwrite: true);
+    if (scenario == "pre-failure")
+    {
+        Console.Error.Write("\u001b[31mSynthetic submission failure\u001b[0m");
+        return 19;
+    }
+    if (scenario == "malformed")
+    {
+        Console.WriteLine("{not-json}");
+        return 0;
+    }
+    if (scenario == "missing-fields")
+    {
+        Console.WriteLine("{\"type\":\"assistant.message_delta\",\"data\":{}}");
+        return 0;
+    }
+    if (scenario == "oversized-event")
+    {
+        Console.Write(new string('x', 1024 * 1024 + 1));
+        return 0;
+    }
+    if (scenario == "tool-activity") Emit(new { type = "tool.execution_start", data = new { } });
+    if (scenario == "session-error") Emit(new { type = "session.error", data = new { message = "Synthetic service failure" } });
+    if (scenario != "no-model")
+        Emit(new
+        {
+            type = "model.model_call_success",
+            data = new
+            {
+                toolCount = scenario == "tools" ? 1 : 0,
+                requestCapture = new { tools = scenario == "captured-tools" ? new[] { "shell" } : [] }
+            }
+        });
+    Emit(new { type = "usage", data = new { content = "DIAGNOSTIC_NOT_RESPONSE" } });
+    const string first = "first \u001b[";
+    const string second = "31m\u20ac\u6f22\U0001f680\u001b[0m\r\nsecond\tline\u001b]0;hidden title\a\nthird";
+    var raw = first + second;
+    if (scenario != "final-only")
+    {
+        var json = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = first } });
+        foreach (var part in Encoding.UTF8.GetBytes(json + "\n").Chunk(7))
+            await WriteBytesAsync(part);
+        if (scenario is "stream" or "partial-failure" or "stall") await WaitForFileAsync("chat.continue");
+        var unicodeJson = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = second } },
+            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        foreach (var part in Encoding.UTF8.GetBytes(unicodeJson + "\n").Chunk(1))
+            await WriteBytesAsync(part);
+    }
+    if (scenario == "partial-failure")
+    {
+        Console.Error.Write("\u001b[33mSynthetic failure after output\u001b[0m");
+        return 23;
+    }
+    if (scenario == "stall")
+    {
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        return 75;
+    }
+    if (scenario == "truncated")
+    {
+        Console.Write("{\"type\":");
+        return 0;
+    }
+    var final = new
+    {
+        type = "assistant.message",
+        data = new
+        {
+            content = scenario == "mismatch" ? "wrong final" : raw,
+            toolRequests = scenario == "tool-request" ? new[] { "shell" } : []
+        }
+    };
+    Emit(final);
+    if (scenario == "duplicate-final") Emit(final);
+    if (scenario != "no-result")
+    {
+        var session = arguments.Single(arg => arg.StartsWith("--session-id="))["--session-id=".Length..];
+        Emit(new
+        {
+            type = "result",
+            sessionId = scenario == "wrong-session" ? Guid.NewGuid().ToString() : session,
+            exitCode = scenario == "failed-result" ? 1 : 0
+        });
+    }
+    if (scenario == "stderr") Console.Error.Write("Synthetic unexpected stderr");
+    return scenario == "nonzero" ? 21 : 0;
+
+    static void Emit(object value)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(value));
+        Console.Out.Flush();
     }
 }

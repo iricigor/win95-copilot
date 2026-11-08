@@ -57,11 +57,14 @@
         <Grid Grid.Row="3" Margin="8,0,8,8">
             <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <TextBox x:Name="PromptInput" Height="84" AcceptsReturn="True" TextWrapping="NoWrap"
+                     TextChanged="OnPromptChanged"
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                      AutomationProperties.Name="Message input" />
             <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
-                <Button x:Name="SendButton" Content="_SEND" IsEnabled="False" MinWidth="80" Command="{x:Static local:ShellCommands.Send}" />
+                <Button x:Name="SendButton" Content="_SEND" MinWidth="80" Command="{x:Static local:ShellCommands.Send}"
+                        CommandTarget="{Binding ElementName=ShellWindow}" />
                 <Button x:Name="StopButton" Content="S_top" IsEnabled="False" MinWidth="80" Margin="0,6,0,0"
+                        ToolTip="Stop will be implemented with cancellation controls. Exit settles the owned request."
                         Command="{x:Static local:ShellCommands.Stop}" />
             </StackPanel>
         </Grid>

@@ -10,6 +10,7 @@ using WinChatCopilot.Settings;
 
 namespace WinChatCopilot.Tests;
 
+[Collection("WPF")]
 public class BackendTests
 {
     [Fact]

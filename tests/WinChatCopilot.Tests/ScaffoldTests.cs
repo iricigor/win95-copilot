@@ -3,6 +3,7 @@ using System.Windows;
 
 namespace WinChatCopilot.Tests;
 
+[Collection("WPF")]
 public class ScaffoldTests
 {
     [Fact]

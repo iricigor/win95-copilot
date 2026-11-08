@@ -23,6 +23,18 @@ public sealed class CopilotReadiness(string storageDirectory)
             throw new InvalidDataException("This app supports the verified bundled Copilot CLI 1.0.81 contract only. Select a compatible executable; other versions need text-only contract verification. No install or update was attempted.");
 
         var session = new BackendSession(executable, Guid.NewGuid(), home, work);
+        var output = await RunAsync(CreateRequest(session,
+            "Connection check only. Reply with READY. Do not use tools."), cancellationToken).ConfigureAwait(false);
+        try { VerifyResponse(output, session.Id); }
+        catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
+        {
+            throw new InvalidDataException("Copilot returned malformed readiness events. Select a compatible backend; no ready state was accepted.", error);
+        }
+        return session;
+    }
+
+    internal static ProcessStartInfo CreateRequest(BackendSession session, string prompt)
+    {
         var arguments = new[]
         {
             "--no-auto-update", "--no-custom-instructions", "--no-ask-user",
@@ -30,16 +42,9 @@ public sealed class CopilotReadiness(string storageDirectory)
             "--disallow-temp-dir", "--available-tools=__winchat_text_only__",
             "--deny-tool=shell", "--deny-tool=write", "--output-format=json",
             "--stream=on", "--mode=interactive", $"--session-id={session.Id}",
-            "--prompt", "Connection check only. Reply with READY. Do not use tools."
+            "--prompt", prompt
         };
-        var output = await RunAsync(CreateStartInfo(executable, home, work, arguments),
-            cancellationToken).ConfigureAwait(false);
-        try { VerifyResponse(output, session.Id); }
-        catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
-        {
-            throw new InvalidDataException("Copilot returned malformed readiness events. Select a compatible backend; no ready state was accepted.", error);
-        }
-        return session;
+        return CreateStartInfo(session.ExecutablePath, session.Home, session.WorkingDirectory, arguments);
     }
 
     private static ProcessStartInfo CreateStartInfo(string executable, string home, string work,
