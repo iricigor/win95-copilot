@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -20,17 +19,16 @@ public class ExportTests
     [InlineData(ResponseState.Generating, "\r\n[In progress]")]
     public void ExactSnapshotPreservesUnicodeMultilineTextTimestampsAndState(ResponseState state, string marker)
     {
-        var turn = new ChatTurn("  one\n\u6f22\U0001f680\t\r\n\r\n  ")
+        var turn = new ChatTurn("  one\n\u6f22\U0001f680\t\r\n\r\n  ",
+            new DateTimeOffset(2026, 11, 8, 9, 5, 47, TimeSpan.FromMinutes(330)))
         {
             Response = "partial \u20ac\r\nsecond\n\n",
             State = state
         };
         foreach (var timestamps in new[] { false, true })
         {
-            var stamp = timestamps
-                ? " [" + turn.SubmittedAt.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture) + "]"
-                : "";
-            Assert.Equal("User" + stamp + ": " + turn.Prompt + "\r\nAssistant" + stamp +
+            var stamp = timestamps ? "[09:05] " : "";
+            Assert.Equal(stamp + "User: " + turn.Prompt + "\r\n" + stamp + "Assistant" +
                 ": partial \u20ac\r\nsecond" + marker + "\r\n",
                 TranscriptDisplay.Format([turn], timestamps, markGenerating: true));
             Assert.Empty(TranscriptDisplay.Format([], timestamps, markGenerating: true));

@@ -266,11 +266,14 @@ focused area. Copy needs a selection; Paste needs editable input and compatible
 clipboard text. Transcript Paste/Cut remain unavailable.
 
 Word Wrap changes both panes and disables their horizontal scrolling while
-enabled. Show Timestamp adds a local submission-time `yyyy-MM-dd HH:mm:ss zzz`
-timestamp to both speaker headings for each turn (the assistant heading marks
-the start, not completion). Original prompt/response text, submission/finish
+enabled. Show Timestamp puts an invariant 24-hour `[HH:mm]` timestamp before
+each speaker name, for example `[09:05] User: ` and `[09:05] Assistant: `.
+Both headings use the turn's represented local submission time, without timezone
+conversion (the assistant heading marks the start, not completion). No date,
+seconds or offset is displayed; plain-text exports use the same headings.
+Original prompt/response text, submission/finish
 times and completion/failure/cancellation state remain canonical and unchanged
-for future export. Toggling timestamps rebuilds only the display, including
+for future export. Toggling timestamps updates only the existing heading runs, including
 partial text and failure/cancellation markers. These presentation preferences
 can be changed and saved during generation without changing backend identity.
 Save errors are reported and the previous preference/check state is restored.

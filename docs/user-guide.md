@@ -68,8 +68,11 @@ Unsent/cancelled input is preserved for review, never automatically submitted.
 checks the same session before the next deliberate SEND.
 
 Edit Copy/Paste/Select All act on the focused text pane; the transcript cannot
-be edited. Word Wrap applies to both panes. Show Timestamp adds local
-submission-time timestamps to speaker headings. Scrolling away from the bottom
+be edited. Word Wrap applies to both panes. Show Timestamp prefixes both speaker
+names with the same turn submission time in 24-hour `[HH:mm]` form, for example
+`[09:05] User: ` and `[09:05] Assistant: `, without date, seconds or timezone
+conversion. It is off by default; exports use the same heading format.
+Scrolling away from the bottom
 keeps your reading position during streaming; return to the bottom to follow.
 Options persist send mode, wrap, timestamps, Auto-connect and executable path.
 Auto-connect is off by default and can be enabled after configuration.

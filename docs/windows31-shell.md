@@ -63,7 +63,9 @@ and timestamp conventions.
 
 The native read-only rich transcript uses the same recessed text-area template,
 Courier New and retro scrollbars as the input. Speaker labels are bold, with
-normal-weight bodies beside them and no generated blank separator rows. Timestamp
+normal-weight bodies beside them and no generated blank separator rows. Compact
+`[HH:mm]` timestamps precede the bold speaker names; both headings retain the
+turn's submission-time semantics and exports match the displayed headings. Timestamp
 and failure/cancellation text remains normal weight. This does not change the
 Windows 3.1 chrome or introduce Markdown rendering.
 

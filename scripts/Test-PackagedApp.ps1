@@ -408,7 +408,7 @@ try {
     Measure-Memory 'gated synthetic streaming after first delta'
     Menu 'Options' 'Word Wrap'
     Menu 'Options' 'Show Timestamp'
-    Assert-True ((Transcript) -match '\d{4}-\d{2}-\d{2} ') 'Timestamp toggle did not update actual transcript.'
+    Assert-True ((Transcript) -match '(?m)^\[\d{2}:\d{2}\] User: ' -and (Transcript) -match '(?m)^\[\d{2}:\d{2}\] Assistant: ') 'Timestamp toggle did not produce compact timestamps before both speaker names.'
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
     Wait-For { (Status) -like 'Copilot ready*' } 'stream completion'
     Assert-True ((Transcript).Contains([char]0x20AC) -and -not (Transcript).Contains([char]27) -and -not (Transcript).Contains('DIAGNOSTIC_NOT_RESPONSE')) 'Actual transcript leaked diagnostics or lost Unicode.'
@@ -480,6 +480,7 @@ try {
     $bytes=[IO.File]::ReadAllBytes($export)
     Assert-True (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)) 'Export contains UTF-8 BOM.'
     Assert-True ([IO.File]::ReadAllText($export).Contains('synthetic after reset')) 'Native export omitted current conversation.'
+    Assert-True ([IO.File]::ReadAllText($export) -eq (Transcript)) 'Native export headings/text differed from the completed displayed transcript.'
     Menu 'File' 'Save Transcript...'
     Wait-For { $null -ne (Owned-Window 'Save Transcript') } 'save cancellation dialog'
     Invoke-Element (By-Name 'Cancel' (Owned-Window 'Save Transcript'))
