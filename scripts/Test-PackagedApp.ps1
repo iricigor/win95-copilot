@@ -312,7 +312,7 @@ function Measure-Memory([string] $Workload) {
     }
 }
 function Requests {
-    return @(Get-Content -LiteralPath (Join-Path $script:data 'work\chat.requests.jsonl') | ForEach-Object { ,($_ | ConvertFrom-Json) })
+    return ,@(Get-Content -LiteralPath (Join-Path $script:data 'work\chat.requests.jsonl') | ForEach-Object { ,($_ | ConvertFrom-Json) })
 }
 function Submit([string] $Text, [string] $Mode = 'Button') {
     Set-Value (By-Id 'PromptInput') $Text
