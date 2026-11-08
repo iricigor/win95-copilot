@@ -30,8 +30,8 @@ public sealed class TranscriptView : RichTextBox
         {
             var speaker = Document.Blocks.Count % 2 == 0 ? "User" : "Assistant";
             var paragraph = new Paragraph { Margin = new Thickness(0), Padding = new Thickness(0) };
-            paragraph.Inlines.Add(new Run(speaker) { FontWeight = FontWeights.Bold });
             paragraph.Inlines.Add(new Run { FontWeight = FontWeights.Normal });
+            paragraph.Inlines.Add(new Run(speaker) { FontWeight = FontWeights.Bold });
             paragraph.Inlines.Add(new Run(":") { FontWeight = FontWeights.Bold });
             paragraph.Inlines.Add(new Run { FontWeight = FontWeights.Normal });
             Document.Blocks.Add(paragraph);
@@ -50,7 +50,7 @@ public sealed class TranscriptView : RichTextBox
     private static void UpdateMessage(Paragraph paragraph, string timestamp, string message)
     {
         var runs = paragraph.Inlines.Cast<Run>().ToArray();
-        UpdateRun(runs[1], timestamp);
+        UpdateRun(runs[0], timestamp);
         UpdateRun(runs[3], " " + message);
     }
 
@@ -90,7 +90,7 @@ public sealed class TranscriptView : RichTextBox
             var runs = paragraph.Inlines.OfType<Run>().ToArray();
             if (runs.Length == 4)
             {
-                formatted.SetFontWeight(FontWeights.Bold, 0, runs[0].Text.Length);
+                formatted.SetFontWeight(FontWeights.Bold, runs[0].Text.Length, runs[1].Text.Length);
                 formatted.SetFontWeight(FontWeights.Bold, runs[0].Text.Length + runs[1].Text.Length, 1);
             }
             width = Math.Max(width, formatted.WidthIncludingTrailingWhitespace);

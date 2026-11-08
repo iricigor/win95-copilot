@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -6,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using WinChatCopilot.Backend;
 using WinChatCopilot.Settings;
@@ -15,6 +17,35 @@ namespace WinChatCopilot.Tests;
 [Collection("WPF")]
 public class InputTests
 {
+    [Theory]
+    [InlineData(0, 0, 0, "en-US", "[00:00] ")]
+    [InlineData(9, 5, 330, "fr-FR", "[09:05] ")]
+    [InlineData(23, 59, -480, "ar-SA", "[23:59] ")]
+    [InlineData(9, 5, -210, "fi-FI", "[09:05] ")]
+    [InlineData(23, 59, 840, "ja-JP", "[23:59] ")]
+    public void CompactHeadingsUseInvariantSubmittedTimeWithoutOffsetConversion(
+        int hour, int minute, int offsetMinutes, string culture, string stamp)
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+            var submitted = new DateTimeOffset(2026, 11, 8, hour, minute, 47, TimeSpan.FromMinutes(offsetMinutes));
+            var turn = new ChatTurn("prompt", submitted) { Response = "reply", State = ResponseState.Completed };
+            foreach (var timestamps in new[] { false, true })
+            {
+                var prefix = timestamps ? stamp : "";
+                Assert.Equal(prefix + "User: ", TranscriptDisplay.Heading("User", submitted, timestamps));
+                Assert.Equal(prefix + "Assistant: ", TranscriptDisplay.Heading("Assistant", submitted, timestamps));
+                Assert.Equal(prefix + "User: prompt\r\n" + prefix + "Assistant: reply\r\n",
+                    TranscriptDisplay.Format([turn], timestamps, markGenerating: true));
+            }
+            Assert.Equal(submitted, turn.SubmittedAt);
+            Assert.Null(turn.FinishedAt);
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
+    }
+
     [Theory]
     [InlineData(SendMode.ControlEnter, ModifierKeys.None, false)]
     [InlineData(SendMode.ControlEnter, ModifierKeys.Shift, false)]
@@ -164,18 +195,31 @@ public class InputTests
             transcript.ScrollToVerticalOffset(100);
             await WaitAsync(() => Math.Abs(transcript.VerticalOffset - 100) < 1);
             var before = transcript.VerticalOffset;
-            var selectionStart = transcript.Document.ContentStart.GetPositionAtOffset(6)!;
+            var promptBody = (Run)((Paragraph)transcript.Document.Blocks.FirstBlock).Inlines.LastInline;
+            var selectionStart = promptBody.ContentStart.GetPositionAtOffset(1)!;
             var selectionEnd = selectionStart.GetPositionAtOffset(6)!;
             transcript.Selection.Select(selectionStart, selectionEnd);
             var selectedText = transcript.Selection.Text;
             var textBeforeSelection = new TextRange(transcript.Document.ContentStart, transcript.Selection.Start).Text;
             input.Focus();
+            var session = backend.Session;
+            var turn = window.Turns[0];
+            var response = turn.Response;
+            var submittedAt = turn.SubmittedAt;
             ShellCommands.ShowTimestamp.Execute(null, window);
             Assert.Equal(selectedText, transcript.Selection.Text);
             Assert.True(input.IsKeyboardFocusWithin);
+            Assert.InRange(Math.Abs(transcript.VerticalOffset - before), 0, 1);
             ShellCommands.ShowTimestamp.Execute(null, window);
             Assert.Equal(selectedText, transcript.Selection.Text);
             Assert.True(input.IsKeyboardFocusWithin);
+            Assert.InRange(Math.Abs(transcript.VerticalOffset - before), 0, 1);
+            Assert.Equal("synthetic scroll", input.Text);
+            Assert.Equal("synthetic scroll", turn.Prompt);
+            Assert.Equal(response, turn.Response);
+            Assert.Equal(submittedAt, turn.SubmittedAt);
+            Assert.Equal(ResponseState.Generating, turn.State);
+            Assert.Same(session, backend.Session);
             if (returnToBottom)
             {
                 transcript.ScrollToEnd();
@@ -190,6 +234,8 @@ public class InputTests
             Assert.Equal(selectedText, transcript.Selection.Text);
             Assert.Equal(textBeforeSelection, new TextRange(transcript.Document.ContentStart, transcript.Selection.Start).Text);
             Assert.Contains("synthetic line 169", transcript.Text);
+            Assert.Same(session, backend.Session);
+            Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
         }
         finally { window.Close(); }
     });
@@ -268,26 +314,33 @@ public class InputTests
     [InlineData(true, ResponseState.Cancelled, "partial\n\n")]
     [InlineData(false, ResponseState.Failed, "")]
     [InlineData(true, ResponseState.Cancelled, "\r\n")]
+    [InlineData(false, ResponseState.Generating, "partial")]
+    [InlineData(true, ResponseState.Generating, "partial")]
     public void RichTranscriptHasOnlyBoldLabelsAndCompactNormalBodies(
         bool timestamps, ResponseState state, string response) => OnSta(() =>
     {
         var view = new TranscriptView();
         var turns = new[]
         {
-            new ChatTurn("Hi\r\n") { Response = response, State = state },
+            new ChatTurn("Hi\r\n", new DateTimeOffset(2026, 11, 8, 9, 5, 47, TimeSpan.FromHours(-8)))
+                { Response = response, State = state },
             new ChatTurn("line\t\u6f22\n\n  next \n") { Response = "reply\n\ninside\t \u20ac\r\n", State = ResponseState.Completed }
         };
         view.Update(turns, timestamps);
         Assert.Equal(TranscriptDisplay.Format(turns, timestamps), view.Text);
         Assert.Equal(4, view.Document.Blocks.Count);
+        var paragraphIndex = 0;
         foreach (var paragraph in view.Document.Blocks.Cast<Paragraph>())
         {
+            var turn = turns[paragraphIndex++ / 2];
             Assert.Equal(new Thickness(0), paragraph.Margin);
             Assert.Equal(new Thickness(0), paragraph.Padding);
             var runs = paragraph.Inlines.Cast<Run>().ToArray();
             Assert.Equal(4, runs.Length);
-            Assert.Equal(FontWeights.Bold, runs[0].FontWeight);
-            Assert.Equal(FontWeights.Normal, runs[1].FontWeight);
+            Assert.Equal(FontWeights.Normal, runs[0].FontWeight);
+            Assert.Equal(TranscriptDisplay.Timestamp(turn.SubmittedAt, timestamps), runs[0].Text);
+            Assert.Equal(FontWeights.Bold, runs[1].FontWeight);
+            Assert.Contains(runs[1].Text, new[] { "User", "Assistant" });
             Assert.Equal(FontWeights.Bold, runs[2].FontWeight);
             Assert.Equal(":", runs[2].Text);
             Assert.Equal(FontWeights.Normal, runs[3].FontWeight);
@@ -333,8 +386,10 @@ public class InputTests
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public void PopulatedRichTranscriptWrapCopyPasteAndFocusUseNativeBehavior() => OnSta(async () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PopulatedRichTranscriptWrapCopyPasteAndFocusUseNativeBehavior(bool timestamps) => OnSta(async () =>
     {
         using var fixture = new Fixture("complete");
         var window = new MainWindow(fixture.Controller());
@@ -348,9 +403,19 @@ public class InputTests
                 Response = string.Join("\n", Enumerable.Range(0, 80).Select(i => $"line {i}")),
                 State = ResponseState.Completed
             };
-            view.Update([turn], false);
+            view.Update([turn], timestamps);
             view.SetWordWrap(false);
             view.UpdateLayout();
+            foreach (var paragraph in view.Document.Blocks.Cast<Paragraph>())
+            {
+                var runs = paragraph.Inlines.Cast<Run>().ToArray();
+                var text = string.Concat(runs.Select(run => run.Text)).Split('\n')[0];
+                var measured = new FormattedText(text, CultureInfo.InvariantCulture, view.FlowDirection,
+                    new Typeface(view.FontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+                    view.FontSize, view.Foreground, VisualTreeHelper.GetDpi(view).PixelsPerDip);
+                measured.SetFontWeight(FontWeights.Bold, runs[0].Text.Length, runs[1].Text.Length + 1);
+                Assert.True(view.Document.PageWidth >= measured.WidthIncludingTrailingWhitespace);
+            }
             Assert.True(view.ExtentWidth > view.ViewportWidth);
             Assert.True(view.ExtentHeight > view.ViewportHeight);
             view.ScrollToHorizontalOffset(100);
@@ -366,7 +431,7 @@ public class InputTests
                 e.CancelCommand();
             });
             ShellCommands.Copy.Execute(null, view);
-            Assert.Equal(TranscriptDisplay.Format([turn], false), copied);
+            Assert.Equal(TranscriptDisplay.Format([turn], timestamps), copied);
             Assert.DoesNotContain("**", copied!);
             Assert.False(ShellCommands.Paste.CanExecute(null, view));
             ShellCommands.Paste.Execute(null, view);

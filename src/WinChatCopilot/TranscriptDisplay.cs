@@ -7,10 +7,10 @@ namespace WinChatCopilot;
 internal static class TranscriptDisplay
 {
     internal static string Heading(string speaker, DateTimeOffset submittedAt, bool timestamps) =>
-        $"{speaker}{Timestamp(submittedAt, timestamps)}: ";
+        $"{Timestamp(submittedAt, timestamps)}{speaker}: ";
 
     internal static string Timestamp(DateTimeOffset submittedAt, bool timestamps) =>
-        timestamps ? $" [{submittedAt.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)}]" : "";
+        timestamps ? $"[{submittedAt.ToString("HH:mm", CultureInfo.InvariantCulture)}] " : "";
 
     internal static string Marker(ResponseState state, bool markGenerating = false) => state switch
     {
