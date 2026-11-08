@@ -15,7 +15,8 @@
         <Menu x:Name="MainMenu">
             <MenuItem Header="_File">
                 <MenuItem Header="_Save Transcript..." IsEnabled="False" Command="{x:Static local:ShellCommands.SaveTranscript}" />
-                <MenuItem Header="_Clear Window" IsEnabled="False" Command="{x:Static local:ShellCommands.ClearWindow}" />
+                <MenuItem Header="_Clear Window" Command="{x:Static local:ShellCommands.ClearWindow}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
                 <Separator />
                 <MenuItem Header="E_xit" InputGestureText="Alt+F4" Command="{x:Static SystemCommands.CloseWindowCommand}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
