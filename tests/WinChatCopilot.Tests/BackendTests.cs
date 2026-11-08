@@ -145,19 +145,28 @@ public class BackendTests
         using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var backend = fixture.Controller();
         var run = backend.ConnectAsync(bound.Token);
-        var file = Path.Combine(fixture.Work, "readiness.started");
-        var deadline = Stopwatch.StartNew();
-        while (!File.Exists(file))
+        try
         {
-            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10));
-            await Task.Delay(20);
+            var file = Path.Combine(fixture.Work, "readiness.started");
+            var deadline = Stopwatch.StartNew();
+            while (!File.Exists(file))
+            {
+                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10));
+                await Task.Delay(20);
+            }
+            using var process = Process.GetProcessById(int.Parse(File.ReadAllText(file)));
+            Assert.True(backend.IsBusy);
+            await bound.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(12)));
+            Assert.True(process.HasExited);
+            Assert.Equal(BackendState.Disconnected, backend.State);
         }
-        using var process = Process.GetProcessById(int.Parse(File.ReadAllText(file)));
-        Assert.True(backend.IsBusy);
-        await bound.CancelAsync();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(12)));
-        Assert.True(process.HasExited);
-        Assert.Equal(BackendState.Disconnected, backend.State);
+        finally
+        {
+            await bound.CancelAsync();
+            try { await run.WaitAsync(TimeSpan.FromSeconds(12)); }
+            catch (OperationCanceledException) when (bound.IsCancellationRequested) { }
+        }
     }
 
     [Theory]
@@ -275,11 +284,7 @@ public class BackendTests
         public Fixture()
         {
             Directory.CreateDirectory(Work);
-            var bin = Path.Combine(Root, "Fake CLI");
-            Directory.CreateDirectory(bin);
-            foreach (var file in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Fake CLI")))
-                File.Copy(file, Path.Combine(bin, Path.GetFileName(file)));
-            Executable = Path.Combine(bin, "WinChatCopilot.FakeCli.exe");
+            Executable = Path.Combine(AppContext.BaseDirectory, "Fake CLI", "WinChatCopilot.FakeCli.exe");
             Store = new SettingsStore(Path.Combine(Root, "settings.json"));
         }
         public BackendController Controller()

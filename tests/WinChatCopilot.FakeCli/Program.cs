@@ -83,7 +83,8 @@ switch (scenario)
             }
             File.WriteAllText("readiness.arguments.json", JsonSerializer.Serialize(arguments));
             File.WriteAllText("readiness.home", Environment.GetEnvironmentVariable("COPILOT_HOME"));
-            File.WriteAllText("readiness.started", Environment.ProcessId.ToString());
+            File.WriteAllText("readiness.started.pending", Environment.ProcessId.ToString());
+            File.Move("readiness.started.pending", "readiness.started", overwrite: true);
             if (scenario == "auth")
             {
                 Console.Error.Write("Synthetic authentication failure. Sign in separately.");
