@@ -107,11 +107,15 @@ public class ShellTests
             Assert.Equal(new[] { "_File", "_Edit", "_Options", "_Help" },
                 menu.Items.Cast<MenuItem>().Select(item => (string)item.Header));
             var actions = menu.Items.Cast<MenuItem>()
-                .SelectMany(item => item.Items.OfType<MenuItem>()).ToArray();
+                .SelectMany(item => item.Items.OfType<MenuItem>())
+                .SelectMany(item => item.HasItems ? item.Items.OfType<MenuItem>() : new[] { item }).ToArray();
             Assert.All(actions, item =>
             {
                 Assert.NotNull(item.Command);
-                Assert.Contains("_", (string)item.Header);
+                if (item.Command == ShellCommands.SelectFont)
+                    Assert.StartsWith((string)item.CommandParameter, ((TextBlock)item.Header).Text);
+                else
+                    Assert.Contains("_", (string)item.Header);
                 item.CommandTarget = window;
                 Assert.Equal(item.Command == ShellCommands.About ||
                     item.Command == SystemCommands.CloseWindowCommand, ((RoutedCommand)item.Command).CanExecute(null, window));

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using WinChatCopilot.Backend;
 using WinChatCopilot.Settings;
@@ -14,6 +15,8 @@ public partial class MainWindow : RetroWindow
 {
     private readonly BackendController backend;
     private readonly Func<Window, string?> selectTranscriptPath;
+    private readonly Func<string, bool> isFontInstalled;
+    private readonly Dictionary<string, MenuItem> fontItems = [];
     private readonly CancellationTokenSource lifetime = new();
     private bool closing;
     private bool shutdownComplete;
@@ -39,9 +42,14 @@ public partial class MainWindow : RetroWindow
     public MainWindow(BackendController backend) : this(backend, TranscriptExport.SelectPath) { }
 
     internal MainWindow(BackendController backend, Func<Window, string?> selectTranscriptPath)
+        : this(backend, selectTranscriptPath, TranscriptFont.IsInstalled) { }
+
+    internal MainWindow(BackendController backend, Func<Window, string?> selectTranscriptPath,
+        Func<string, bool> isFontInstalled)
     {
         this.backend = backend;
         this.selectTranscriptPath = selectTranscriptPath;
+        this.isFontInstalled = isFontInstalled;
         foreach (var command in ShellCommands.Unimplemented)
             CommandBindings.Add(new CommandBinding(command, null, (_, e) => e.CanExecute = false));
         CommandBindings.Add(new CommandBinding(ShellCommands.About,
@@ -70,6 +78,10 @@ public partial class MainWindow : RetroWindow
         CommandBindings.Add(new CommandBinding(ShellCommands.UserName,
             (_, _) => new UserNameWindow(backend.Settings.UserName, SaveUserName) { Owner = this }.ShowDialog(),
             (_, e) => e.CanExecute = initialized && !closing));
+        CommandBindings.Add(new CommandBinding(ShellCommands.SelectFont,
+            (_, e) => SaveDisplaySettings(backend.Settings with { TextFont = (string)e.Parameter }),
+            (_, e) => e.CanExecute = initialized && !closing && e.Parameter is string font &&
+                TranscriptFont.Choices.Contains(font) && isFontInstalled(font)));
         CommandBindings.Add(new CommandBinding(ShellCommands.Send,
             async (_, _) => await SendAsync(), (_, e) => e.CanExecute = !closing && !resetting &&
                 pendingGeneration is null && backend.State == BackendState.Ready &&
@@ -84,6 +96,27 @@ public partial class MainWindow : RetroWindow
             async (_, _) => await SaveTranscriptAsync(), (_, e) => e.CanExecute = initialized && !closing &&
                 !resetting && !savingTranscript));
         InitializeComponent();
+        foreach (var font in TranscriptFont.Choices)
+        {
+            var installed = isFontInstalled(font);
+            var item = new MenuItem
+            {
+                Header = new TextBlock
+                {
+                    Text = installed ? font : $"{font} (not installed)",
+                    FontFamily = installed ? new FontFamily(font) : MainMenu.FontFamily
+                },
+                IsCheckable = true,
+                IsEnabled = installed,
+                Command = ShellCommands.SelectFont,
+                CommandParameter = font,
+                CommandTarget = this,
+                ToolTip = installed ? $"Use {font} for transcript and message input."
+                    : $"{font} is not installed. Choose another available font."
+            };
+            fontItems.Add(font, item);
+            FontMenu.Items.Add(item);
+        }
         Transcript.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnTranscriptScrollChanged));
         Title = $"WinChat-Copilot {ApplicationInfo.Version}";
         backend.Changed += UpdateBackend;
@@ -382,6 +415,19 @@ public partial class MainWindow : RetroWindow
 
     private void UpdateBackend()
     {
+        var fontAvailable = isFontInstalled(backend.Settings.TextFont);
+        var effectiveFont = fontAvailable ? backend.Settings.TextFont : TranscriptFont.Default;
+        foreach (var (font, item) in fontItems)
+            item.IsChecked = fontAvailable && font == backend.Settings.TextFont;
+        FontStatus.Text = fontAvailable ? "" :
+            $"Saved font '{backend.Settings.TextFont}' is not installed. Temporarily rendering with Courier New" +
+            (isFontInstalled(TranscriptFont.Default) ? ". " : " (also unavailable; Windows supplies a substitute). ") +
+            "The saved preference is unchanged; choose an installed font in Options > Font.";
+        FontStatus.Visibility = fontAvailable ? Visibility.Collapsed : Visibility.Visible;
+        if (Transcript.FontFamily.Source != effectiveFont || Transcript.Document.FontFamily.Source != effectiveFont)
+            ChangeTranscript(() => Transcript.SetTextFont(new FontFamily(effectiveFont)));
+        if (PromptInput.FontFamily.Source != effectiveFont)
+            PromptInput.FontFamily = new FontFamily(effectiveFont);
         AutoConnectMenu.IsChecked = backend.Settings.AutoConnect;
         SendEnterMenu.IsChecked = backend.Settings.SendMode == SendMode.Enter;
         SendControlEnterMenu.IsChecked = backend.Settings.SendMode == SendMode.ControlEnter;

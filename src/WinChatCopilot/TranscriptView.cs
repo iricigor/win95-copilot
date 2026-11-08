@@ -86,6 +86,12 @@ public sealed class TranscriptView : RichTextBox
         UpdatePageWidth();
     }
 
+    internal void SetTextFont(FontFamily family)
+    {
+        FontFamily = Document.FontFamily = family;
+        UpdatePageWidth();
+    }
+
     private void UpdatePageWidth()
     {
         if (wordWrap)

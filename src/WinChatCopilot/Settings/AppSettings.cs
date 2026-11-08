@@ -14,4 +14,5 @@ public sealed record AppSettings
     public bool AutoConnect { get; init; } = false;
     public bool ShowTimestamp { get; init; } = false;
     public string UserName { get; init; } = "User";
+    public string TextFont { get; init; } = TranscriptFont.Default;
 }
