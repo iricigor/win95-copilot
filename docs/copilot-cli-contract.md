@@ -6,7 +6,8 @@ cancellation were observed. On 2026-11-07, the user explicitly deferred the
 stall/timeout policy and real authentication/mid-stream failure verification
 as consciously not done, for potential improvements on Epic #1. They are not
 blockers for #4 and are not claimed as implemented or passed. This is not a
-production adapter or an end-to-end application pass.
+full-product end-to-end application pass. The scoped production streaming
+adapter delivered by #9 reuses this contract as described below.
 
 ## Verified executable and sources
 
@@ -187,7 +188,7 @@ adapter, credential reset, or arbitrary application default is introduced here.
 
 ## Application discovery and readiness
 
-Task #8 implements connection preparation only. The app pins the verified
+Task #8 implements connection preparation. The app pins the verified
 bundled 1.0.81 via `--no-auto-update`; it rejects other versions rather than
 assuming their permission/framing behavior is compatible. No install/update/login
 is invoked. A selected `.exe` must be trusted by the user; choosing an arbitrary
@@ -223,4 +224,28 @@ owned work. Readiness output is bounded to 1 MiB per stream; this is a diagnosti
 memory bound, not a response-latency SLA. The deliberately deferred production
 stall policy remains unchanged: connection preparation is cancellable by Exit,
 not assigned an invented provider timeout. A readiness success reflects that
-request, not a permanent network connection or implemented user-chat behavior.
+request, not a permanent network connection.
+
+## Production streamed-turn adapter
+
+Task #9 reuses the exact readiness request builder and `ProcessTransport` for
+user SEND requests. Incremental JSONL framing handles arbitrary pipe chunks;
+only `assistant.message_delta.data.deltaContent` and final-only
+`assistant.message.data.content` become transcript text. Terminal CSI, OSC and
+control strings are removed with state retained across text deltas; normal
+multiline/Unicode text remains intact. Final content is not displayed twice.
+Unknown diagnostic events are ignored, not presented as assistant output.
+
+Completion requires matching streamed/final content, a nonempty clean response,
+zero-tool model evidence, no tool activity/requests or session error, a matching
+successful result, successful OS exit and empty stderr. Malformed/out-of-order
+response events fail explicitly. Each event, accumulated raw response and stderr
+has a 1 MiB memory safety bound. This is not a stall/watchdog policy.
+
+The UI asynchronously appends deltas on its dispatcher, disables concurrent
+SEND/settings/connection operations, preserves failed input and partial output,
+and records per-turn timestamps plus completed/failed/cancelled state. Exit
+settles the new owned subprocess path. Stop/full recovery, session reset,
+keyboard/transcript controls and export remain separately assigned tasks.
+No broader CLI compatibility, full-product acceptance or consciously deferred
+real failure/timeout guarantees are implied.

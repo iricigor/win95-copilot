@@ -6,6 +6,7 @@ using System.Windows.Shell;
 
 namespace WinChatCopilot.Tests;
 
+[Collection("WPF")]
 public class ShellTests
 {
     [Fact]

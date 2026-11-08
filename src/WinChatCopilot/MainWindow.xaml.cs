@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using WinChatCopilot.Backend;
 using WinChatCopilot.Settings;
@@ -15,6 +16,9 @@ public partial class MainWindow : RetroWindow
     private bool closing;
     private bool initialized;
     private Task? pendingConnection;
+    private Task? pendingGeneration;
+    private readonly List<ChatTurn> turns = [];
+    public IReadOnlyList<ChatTurn> Turns => turns.AsReadOnly();
 
     public MainWindow() : this(CreateBackend()) { }
 
@@ -26,11 +30,18 @@ public partial class MainWindow : RetroWindow
         CommandBindings.Add(new CommandBinding(ShellCommands.About,
             (_, _) => new AboutWindow { Owner = this }.ShowDialog(), (_, e) => e.CanExecute = true));
         CommandBindings.Add(new CommandBinding(ShellCommands.Connect,
-            async (_, _) => await ConnectAsync(), (_, e) => e.CanExecute = initialized && !backend.IsBusy));
+            async (_, _) => await ConnectAsync(), (_, e) => e.CanExecute = initialized && !closing &&
+                !backend.IsBusy && pendingGeneration is null));
         CommandBindings.Add(new CommandBinding(ShellCommands.ConfigureBackend,
-            async (_, _) => await ConfigureAsync(), (_, e) => e.CanExecute = initialized && !backend.IsBusy));
+            async (_, _) => await ConfigureAsync(), (_, e) => e.CanExecute = initialized && !closing &&
+                !backend.IsBusy && pendingGeneration is null));
         CommandBindings.Add(new CommandBinding(ShellCommands.AutoConnect,
-            (_, _) => SaveAutoConnect(), (_, e) => e.CanExecute = initialized && !backend.IsBusy));
+            (_, _) => SaveAutoConnect(), (_, e) => e.CanExecute = initialized && !closing &&
+                !backend.IsBusy && pendingGeneration is null));
+        CommandBindings.Add(new CommandBinding(ShellCommands.Send,
+            async (_, _) => await SendAsync(), (_, e) => e.CanExecute = !closing &&
+                pendingGeneration is null && backend.State == BackendState.Ready &&
+                !string.IsNullOrWhiteSpace(PromptInput?.Text)));
         InitializeComponent();
         Title = $"WinChat-Copilot {ApplicationInfo.Version}";
         backend.Changed += UpdateBackend;
@@ -99,13 +110,72 @@ public partial class MainWindow : RetroWindow
         UpdateBackend();
     }
 
+    private void OnPromptChanged(object sender, TextChangedEventArgs e) => CommandManager.InvalidateRequerySuggested();
+
+    internal Task SendAsync()
+    {
+        if (!ShellCommands.Send.CanExecute(null, this)) return Task.CompletedTask;
+        var prompt = PromptInput.Text;
+        var turn = new ChatTurn(prompt);
+        turns.Add(turn);
+        Transcript.AppendText($"User:\r\n{prompt}\r\n\r\nAssistant:\r\n");
+        var generation = GenerateAsync(turn);
+        pendingGeneration = generation.IsCompleted ? null : generation;
+        return generation;
+    }
+
+    private async Task GenerateAsync(ChatTurn turn)
+    {
+        Task lastUpdate = Task.CompletedTask;
+        Exception? failure = null;
+        try
+        {
+            await backend.SendAsync(turn.Prompt, chunk =>
+            {
+                lastUpdate = Dispatcher.InvokeAsync(() =>
+                {
+                    turn.Response += chunk;
+                    Transcript.AppendText(chunk);
+                }).Task;
+            }, lifetime.Token);
+            turn.State = ResponseState.Completed;
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+            turn.State = ResponseState.Cancelled;
+        }
+        catch (Exception error) when (IsBackendError(error))
+        {
+            turn.State = ResponseState.Failed;
+            turn.Error = error.Message;
+            failure = error;
+        }
+        finally
+        {
+            await lastUpdate;
+            turn.FinishedAt = DateTimeOffset.Now;
+            Transcript.AppendText(turn.State switch
+            {
+                ResponseState.Failed => "\r\n[Failed]\r\n\r\n",
+                ResponseState.Cancelled => "\r\n[Cancelled]\r\n\r\n",
+                _ => "\r\n\r\n"
+            });
+            if (turn.State == ResponseState.Completed) PromptInput.Clear();
+            pendingGeneration = null;
+            UpdateBackend();
+        }
+        if (failure is not null) ShowError(failure);
+    }
+
     private void UpdateBackend()
     {
         AutoConnectMenu.IsChecked = backend.Settings.AutoConnect;
+        PromptInput.IsReadOnly = backend.IsBusy || pendingGeneration is not null || closing;
         BackendStatus.Text = backend.State switch
         {
             BackendState.Preparing => "Checking Copilot authentication and text-only readiness...",
-            BackendState.Ready => "Copilot readiness verified - user chat is not implemented yet.",
+            BackendState.Ready => "Copilot ready - enter a message and choose SEND.",
+            BackendState.Generating => "Copilot generating - SEND disabled. Exit cancels the owned request.",
             BackendState.Failed => "Backend check failed - correct configuration/authentication, then Connect again.",
             _ => "Backend unavailable - not connected. Use Connect or Backend Settings."
         };
@@ -122,11 +192,12 @@ public partial class MainWindow : RetroWindow
 
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (closing || pendingConnection is null) return;
+        var pending = pendingGeneration ?? pendingConnection;
+        if (closing || pending is null) return;
         e.Cancel = true;
         closing = true;
         lifetime.Cancel();
-        try { await pendingConnection; }
+        try { await pending; }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         catch (Exception error) when (IsBackendError(error))
         {

@@ -9,8 +9,9 @@ customization support the Windows 3.1 shell without Windows App SDK packaging.
 The reference-led [Windows 3.1 shell](docs/windows31-shell.md) supplies menus,
 text areas, action surfaces and a versioned About dialog. Backend discovery,
 configuration, preference persistence and authenticated text-only readiness
-are implemented. User chat/streaming, export and transcript controls remain
-visibly disabled until their respective tasks.
+are implemented. SEND now streams a text-only chat turn into the transcript.
+Stop, keyboard send modes, export and transcript controls remain visibly
+disabled until their respective tasks.
 
 ### Prerequisites
 
@@ -80,7 +81,8 @@ manually checks the bundled version, then sends one small synthetic text-only
 readiness request using existing CLI authentication. Auto-connect performs the
 same check at startup. Readiness requires a successful service response, matching
 new session identity and zero-tool evidence, not just installation or `gh` login.
-It does not imply permanent connectivity, and user-chat Send remains disabled.
+It does not imply permanent connectivity. SEND is enabled only while ready
+with non-whitespace input and no request running.
 Each explicit reconnect prepares a fresh session; no automatic retry occurs.
 Closing during preparation cancels and settles only the owned subprocess.
 
@@ -155,6 +157,44 @@ owned cancellation, startup Auto-connect/manual reconnect, and bounded STA
 startup/settings command/dialog checks. These synthetic tests run in the same
 Windows CI without real credentials or inference; they are not real CLI evidence.
 
+`ChatTests` exercises the production adapter through the same actual fake
+executable: JSON events split across pipe reads, split UTF-8, gated text before
+exit, multiline text, terminal CSI/OSC/control-string filtering across delta
+boundaries, ignored diagnostic events, exact prompt arguments, zero-tool checks,
+matching successful session results and explicit malformed/partial failures.
+Bounded STA/dispatcher tests cover progressive transcript output, responsiveness,
+single-flight SEND, input retention, modal errors and owned generation shutdown.
+WPF test classes share one xUnit collection to avoid concurrent mutation of
+WindowChrome's process-wide property-descriptor caches; transport tests remain
+independent.
+These are synthetic application tests, not real-service or visual acceptance.
+
+### Streamed chat
+
+Connect establishes the supported text-only backend, then choose SEND to submit
+the input as one argument without a shell. Input is read-only while generating,
+and connection/settings actions are unavailable. The original input is cleared
+only after a complete successful response; failures retain it and any partial
+assistant output, add a visible `[Failed]` marker, and display an actionable
+retro error dialog. No automatic retry occurs. Connect explicitly prepares a
+new backend session after failure; session-reset/continuity UX belongs to #12.
+Each turn stores submission/finish timestamps and generating/completed/failed/
+cancelled state for later transcript/export features.
+
+Only assistant response text enters the read-only monospaced transcript with
+User/Assistant labels. The adapter incrementally frames UTF-8 JSONL, strips
+terminal formatting without losing meaningful newlines/Unicode, and accepts
+completion only with successful OS exit, empty stderr, matching session result,
+zero-tool model evidence and final text matching the deltas. Final-only text is
+supported without duplicating it. Events, raw response text and stderr each have
+a 1 MiB safety bound; this limits memory, not request duration or provider latency.
+The shared readiness/request builder retains all verified text-only restrictions.
+
+Stop remains explicitly disabled until #10; Exit cancels and settles the newly
+owned request before closing. Keyboard send shortcuts, Edit/wrap/timestamps and
+scroll-follow controls belong to #11; export belongs to #13. The user-approved
+real failure/stall evidence deferrals remain unchanged.
+
 `.github\workflows\windows-tests.yml` runs these commands for PRs and `main`
 pushes on `windows-latest` with .NET 10, read-only repository permissions, a
 ten-minute job bound, and two-minute test-host hang diagnostics. The test step
@@ -196,7 +236,7 @@ windows or change real user settings/conversations. Close owned helpers afterwar
 The [Copilot CLI contract investigation](docs/copilot-cli-contract.md) records
 real streaming/session/text-only/cancellation evidence for the tested bundled
 CLI and consciously deferred stall/error improvements agreed on Epic #1.
-The app now implements readiness only, not user-chat integration.
+The app implements readiness and the scoped streamed-turn adapter.
 `scripts\Test-RealCopilot.ps1` requires an explicit
 real-service opt-in and existing local authentication; it is not a routine CI
 test; a passing smoke run does not claim the deferred improvements or the full

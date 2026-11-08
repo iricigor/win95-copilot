@@ -26,7 +26,7 @@ public static class ShellCommands
     public static IReadOnlyList<RoutedUICommand> Unimplemented { get; } =
     [
         SaveTranscript, ClearWindow, Copy, Paste, SelectAll, SendWithEnter,
-        SendWithControlEnter, WordWrap, ShowTimestamp, Send, Stop
+        SendWithControlEnter, WordWrap, ShowTimestamp, Stop
     ];
 
     private static RoutedUICommand Create(string name) => new(name, name, typeof(ShellCommands));

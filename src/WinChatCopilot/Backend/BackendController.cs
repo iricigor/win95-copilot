@@ -2,7 +2,7 @@ using WinChatCopilot.Settings;
 
 namespace WinChatCopilot.Backend;
 
-public enum BackendState { Disconnected, Preparing, Ready, Failed }
+public enum BackendState { Disconnected, Preparing, Ready, Generating, Failed }
 
 public sealed class BackendController(SettingsStore store, BackendDiscovery discovery,
     Func<string, CancellationToken, Task<BackendSession>> prepare)
@@ -10,7 +10,7 @@ public sealed class BackendController(SettingsStore store, BackendDiscovery disc
     public AppSettings Settings { get; private set; } = new();
     public BackendState State { get; private set; } = BackendState.Disconnected;
     public BackendSession? Session { get; private set; }
-    public bool IsBusy => State == BackendState.Preparing;
+    public bool IsBusy => State is BackendState.Preparing or BackendState.Generating;
     public event Action? Changed;
 
     public void Load() => Settings = store.Load();
@@ -18,7 +18,7 @@ public sealed class BackendController(SettingsStore store, BackendDiscovery disc
 
     public void Save(AppSettings settings)
     {
-        if (IsBusy) throw new InvalidOperationException("Wait for connection preparation before changing settings.");
+        if (IsBusy) throw new InvalidOperationException("Wait for connection preparation or generation before changing settings.");
         if (settings.ExecutablePath is not null)
             BackendDiscovery.ValidateExplicit(settings.ExecutablePath);
         store.Save(settings);
@@ -47,6 +47,32 @@ public sealed class BackendController(SettingsStore store, BackendDiscovery disc
         {
             if (Session is null)
                 State = cancellationToken.IsCancellationRequested ? BackendState.Disconnected : BackendState.Failed;
+            Changed?.Invoke();
+        }
+
+    }
+
+    public async Task<string> SendAsync(string prompt, Action<string> onText, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+            throw new ArgumentException("Enter a nonempty message before sending.", nameof(prompt));
+        if (State != BackendState.Ready || Session is null)
+            throw new InvalidOperationException("Copilot is unavailable or busy. Connect before sending.");
+        State = BackendState.Generating;
+        Changed?.Invoke();
+        try
+        {
+            var text = await new CopilotChat().SendAsync(Session, prompt, onText, cancellationToken);
+            State = BackendState.Ready;
+            return text;
+        }
+        finally
+        {
+            if (State == BackendState.Generating)
+            {
+                Session = null;
+                State = cancellationToken.IsCancellationRequested ? BackendState.Disconnected : BackendState.Failed;
+            }
             Changed?.Invoke();
         }
     }
