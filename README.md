@@ -10,8 +10,8 @@ The reference-led [Windows 3.1 shell](docs/windows31-shell.md) supplies menus,
 text areas, action surfaces and a versioned About dialog. Backend discovery,
 configuration, preference persistence and authenticated text-only readiness
 are implemented. SEND now streams a text-only chat turn into the transcript.
-Keyboard send modes, export and transcript controls remain visibly
-disabled until their respective tasks.
+Keyboard send modes, Edit actions and transcript preferences are implemented.
+Export and Clear Window remain visibly disabled until their respective tasks.
 
 ### Prerequisites
 
@@ -68,9 +68,8 @@ describe the supported version and limits.
 
 Preferences live in `%LOCALAPPDATA%\WinChatCopilot\settings.json`. Defaults:
 Ctrl+Enter send mode, Word Wrap off, Auto-connect off, Show Timestamp off,
-automatic executable discovery. Auto-connect is the only preference wired to
-application behavior in this task; input/wrap/timestamp actions remain disabled
-until #11. Backend Settings preserves these other saved fields. Corrupt,
+automatic executable discovery. Menu check states and input/display behavior
+use these persisted preferences. Backend Settings preserves these fields. Corrupt,
 unreadable and unwritable files produce actionable errors; writes replace the
 previous file only after the new document has been written successfully.
 No credentials are collected or saved.
@@ -212,8 +211,7 @@ terminated. The consciously deferred production stall/watchdog policy is
 unchanged: a silent request remains generating until Stop or Exit; test bounds
 are not production latency guarantees.
 
-Keyboard send shortcuts, Edit/wrap/timestamps and
-scroll-follow controls belong to #11; export belongs to #13. The user-approved
+Export belongs to #13; Clear Window/session reset belongs to #12. The user-approved
 real failure/stall evidence deferrals remain unchanged.
 
 Cancellation/recovery regressions cover silent/gated streams, partial/nonzero/
@@ -221,6 +219,37 @@ synthetic authentication failures, same-session explicit recovery, no duplicate
 automatic prompts, cancelling command guards, retained input/markers, retired
 turn stability, repeated closing and owned child cleanup with an unrelated
 sentinel. These synthetic tests are not real-service evidence.
+
+### Input and transcript controls
+
+SEND and the selected shortcut share the same empty/unavailable/busy guards.
+Ctrl+Enter mode is the default: Ctrl+Enter sends, while Enter and Shift+Enter
+retain normal multiline editing. Enter mode consumes Enter, including
+Shift+Enter and Ctrl+Enter, as submission attempts; it provides no keyboard
+newline-entry exception. Pasting multiline text remains possible. Input stays
+read-only during generation and is cleared only on success.
+
+Edit uses WPF's focused-text-area Copy, Paste and Select All commands, including
+their normal Ctrl+C/Ctrl+V/Ctrl+A gestures. Menu focus preserves the previously
+focused area. Copy needs a selection; Paste needs editable input and compatible
+clipboard text. Transcript Paste/Cut remain unavailable.
+
+Word Wrap changes both panes and disables their horizontal scrolling while
+enabled. Show Timestamp adds a local submission-time `yyyy-MM-dd HH:mm:ss zzz`
+timestamp to both speaker headings for each turn (the assistant heading marks
+the start, not completion). Original prompt/response text, submission/finish
+times and completion/failure/cancellation state remain canonical and unchanged
+for future export. Toggling timestamps rebuilds only the display, including
+partial text and failure/cancellation markers. These presentation preferences
+can be changed and saved during generation without changing backend identity.
+Save errors are reported and the previous preference/check state is restored.
+
+Streaming follows the transcript only while at the bottom. Scrolling away
+preserves the reading offset and selection as text arrives; returning to the
+bottom resumes following. Appending output does not move keyboard focus or
+force horizontal scrolling. `InputTests` covers both shortcut modes, shared
+guards, exact timestamp/state formatting, restart persistence, native Edit
+eligibility and actual delayed fake-subprocess scroll behavior.
 
 `.github\workflows\windows-tests.yml` runs these commands for PRs and `main`
 pushes on `windows-latest` with .NET 10, read-only repository permissions, a

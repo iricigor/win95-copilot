@@ -20,6 +20,8 @@ public partial class MainWindow : RetroWindow
     private bool initialized;
     private Task? pendingConnection;
     private Task? pendingGeneration;
+    private bool followingTranscript = true;
+    private bool updatingTranscript;
     private readonly List<ChatTurn> turns = [];
     public IReadOnlyList<ChatTurn> Turns => turns.AsReadOnly();
 
@@ -41,6 +43,18 @@ public partial class MainWindow : RetroWindow
         CommandBindings.Add(new CommandBinding(ShellCommands.AutoConnect,
             (_, _) => SaveAutoConnect(), (_, e) => e.CanExecute = initialized && !closing &&
                 !backend.IsBusy && pendingGeneration is null));
+        CommandBindings.Add(new CommandBinding(ShellCommands.SendWithEnter,
+            (_, _) => SaveDisplaySettings(backend.Settings with { SendMode = SendMode.Enter }),
+            (_, e) => e.CanExecute = initialized && !closing));
+        CommandBindings.Add(new CommandBinding(ShellCommands.SendWithControlEnter,
+            (_, _) => SaveDisplaySettings(backend.Settings with { SendMode = SendMode.ControlEnter }),
+            (_, e) => e.CanExecute = initialized && !closing));
+        CommandBindings.Add(new CommandBinding(ShellCommands.WordWrap,
+            (_, _) => SaveDisplaySettings(backend.Settings with { WordWrap = !backend.Settings.WordWrap }),
+            (_, e) => e.CanExecute = initialized && !closing));
+        CommandBindings.Add(new CommandBinding(ShellCommands.ShowTimestamp,
+            (_, _) => SaveDisplaySettings(backend.Settings with { ShowTimestamp = !backend.Settings.ShowTimestamp }),
+            (_, e) => e.CanExecute = initialized && !closing));
         CommandBindings.Add(new CommandBinding(ShellCommands.Send,
             async (_, _) => await SendAsync(), (_, e) => e.CanExecute = !closing &&
                 pendingGeneration is null && backend.State == BackendState.Ready &&
@@ -49,6 +63,7 @@ public partial class MainWindow : RetroWindow
             async (_, _) => await StopAsync(), (_, e) => e.CanExecute = !closing &&
                 pendingGeneration is not null && backend.State == BackendState.Generating));
         InitializeComponent();
+        Transcript.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnTranscriptScrollChanged));
         Title = $"WinChat-Copilot {ApplicationInfo.Version}";
         backend.Changed += UpdateBackend;
         Loaded += async (_, _) => await InitializeBackendAsync();
@@ -118,6 +133,59 @@ public partial class MainWindow : RetroWindow
 
     private void OnPromptChanged(object sender, TextChangedEventArgs e) => CommandManager.InvalidateRequerySuggested();
 
+    private void OnPromptKeyDown(object sender, KeyEventArgs e) =>
+        e.Handled = HandlePromptKey(e.Key, Keyboard.Modifiers);
+
+    internal bool HandlePromptKey(Key key, ModifierKeys modifiers)
+    {
+        if (key != Key.Enter || (backend.Settings.SendMode != SendMode.Enter && modifiers != ModifierKeys.Control))
+            return false;
+        if (ShellCommands.Send.CanExecute(null, this)) ShellCommands.Send.Execute(null, this);
+        return true;
+    }
+
+    private void SaveDisplaySettings(AppSettings settings)
+    {
+        var timestampsChanged = settings.ShowTimestamp != backend.Settings.ShowTimestamp;
+        try
+        {
+            backend.Save(settings);
+            if (timestampsChanged) ChangeTranscript(() => Transcript.Text = TranscriptDisplay.Format(turns, settings.ShowTimestamp));
+        }
+        catch (Exception error) when (IsBackendError(error)) { ShowError(error); }
+        UpdateBackend();
+    }
+
+    private void OnTranscriptScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (updatingTranscript) return;
+        if (e.ExtentHeightChange == 0 && e.ViewportHeightChange == 0 && e.VerticalChange != 0)
+            followingTranscript = e.VerticalOffset >= e.ExtentHeight - e.ViewportHeight - 0.5;
+        if (followingTranscript && e.ExtentHeightChange != 0)
+            Transcript.ScrollToVerticalOffset(double.MaxValue);
+    }
+
+    private void ChangeTranscript(Action change)
+    {
+        var offset = Transcript.VerticalOffset;
+        var horizontalOffset = Transcript.HorizontalOffset;
+        var selectionStart = Transcript.SelectionStart;
+        var selectionLength = Transcript.SelectionLength;
+        updatingTranscript = true;
+        try
+        {
+            change();
+            Transcript.Select(Math.Min(selectionStart, Transcript.Text.Length),
+                Math.Min(selectionLength, Math.Max(0, Transcript.Text.Length - selectionStart)));
+            Transcript.UpdateLayout();
+            Transcript.ScrollToVerticalOffset(followingTranscript ? double.MaxValue : offset);
+            Transcript.ScrollToHorizontalOffset(horizontalOffset);
+        }
+        finally { updatingTranscript = false; }
+    }
+
+    private void AppendTranscript(string text) => ChangeTranscript(() => Transcript.AppendText(text));
+
     internal Task SendAsync()
     {
         if (!ShellCommands.Send.CanExecute(null, this)) return Task.CompletedTask;
@@ -126,7 +194,8 @@ public partial class MainWindow : RetroWindow
         stopRequested = false;
         activeTurn = turn;
         turns.Add(turn);
-        Transcript.AppendText($"User:\r\n{prompt}\r\n\r\nAssistant:\r\n");
+        AppendTranscript(TranscriptDisplay.Heading("User", turn.SubmittedAt, backend.Settings.ShowTimestamp) +
+            prompt + "\r\n\r\n" + TranscriptDisplay.Heading("Assistant", turn.SubmittedAt, backend.Settings.ShowTimestamp));
         var generation = GenerateAsync(turn);
         pendingGeneration = generation.IsCompleted ? null : generation;
         return generation;
@@ -153,7 +222,7 @@ public partial class MainWindow : RetroWindow
                 {
                     if (!ReferenceEquals(activeTurn, turn) || shutdownComplete) return;
                     turn.Response += chunk;
-                    Transcript.AppendText(chunk);
+                    AppendTranscript(chunk);
                 }).Task;
             }, lifetime.Token);
             turn.State = ResponseState.Completed;
@@ -172,12 +241,7 @@ public partial class MainWindow : RetroWindow
         {
             await lastUpdate;
             turn.FinishedAt = DateTimeOffset.Now;
-            Transcript.AppendText(turn.State switch
-            {
-                ResponseState.Failed => "\r\n[Failed]\r\n\r\n",
-                ResponseState.Cancelled => "\r\n[Cancelled]\r\n\r\n",
-                _ => "\r\n\r\n"
-            });
+            AppendTranscript(TranscriptDisplay.Ending(turn.State));
             if (turn.State == ResponseState.Completed) PromptInput.Clear();
             activeTurn = null;
             pendingGeneration = null;
@@ -189,6 +253,15 @@ public partial class MainWindow : RetroWindow
     private void UpdateBackend()
     {
         AutoConnectMenu.IsChecked = backend.Settings.AutoConnect;
+        SendEnterMenu.IsChecked = backend.Settings.SendMode == SendMode.Enter;
+        SendControlEnterMenu.IsChecked = backend.Settings.SendMode == SendMode.ControlEnter;
+        WordWrapMenu.IsChecked = backend.Settings.WordWrap;
+        TimestampMenu.IsChecked = backend.Settings.ShowTimestamp;
+        PromptInput.AcceptsReturn = backend.Settings.SendMode == SendMode.ControlEnter;
+        var wrapping = backend.Settings.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap;
+        Transcript.TextWrapping = PromptInput.TextWrapping = wrapping;
+        Transcript.HorizontalScrollBarVisibility = PromptInput.HorizontalScrollBarVisibility =
+            backend.Settings.WordWrap ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
         PromptInput.IsReadOnly = backend.IsBusy || pendingGeneration is not null || closing;
         BackendStatus.Text = backend.State switch
         {

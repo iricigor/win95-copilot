@@ -21,18 +21,22 @@
                           CommandTarget="{Binding ElementName=ShellWindow}" />
             </MenuItem>
             <MenuItem Header="_Edit">
-                <MenuItem Header="_Copy" IsEnabled="False" Command="{x:Static local:ShellCommands.Copy}" />
-                <MenuItem Header="_Paste" IsEnabled="False" Command="{x:Static local:ShellCommands.Paste}" />
-                <MenuItem Header="Select _All" IsEnabled="False" Command="{x:Static local:ShellCommands.SelectAll}" />
+                <MenuItem Header="_Copy" InputGestureText="Ctrl+C" Command="{x:Static local:ShellCommands.Copy}" />
+                <MenuItem Header="_Paste" InputGestureText="Ctrl+V" Command="{x:Static local:ShellCommands.Paste}" />
+                <MenuItem Header="Select _All" InputGestureText="Ctrl+A" Command="{x:Static local:ShellCommands.SelectAll}" />
             </MenuItem>
             <MenuItem Header="_Options">
-                <MenuItem Header="Send with _Enter" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.SendWithEnter}" />
-                <MenuItem Header="Send with _Ctrl+Enter" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.SendWithControlEnter}" />
+                <MenuItem x:Name="SendEnterMenu" Header="Send with _Enter" IsCheckable="True" Command="{x:Static local:ShellCommands.SendWithEnter}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
+                <MenuItem x:Name="SendControlEnterMenu" Header="Send with _Ctrl+Enter" IsCheckable="True" Command="{x:Static local:ShellCommands.SendWithControlEnter}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
                 <Separator />
-                <MenuItem Header="_Word Wrap" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.WordWrap}" />
+                <MenuItem x:Name="WordWrapMenu" Header="_Word Wrap" IsCheckable="True" Command="{x:Static local:ShellCommands.WordWrap}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
                 <MenuItem x:Name="AutoConnectMenu" Header="_Auto-connect on Startup" IsCheckable="True" Command="{x:Static local:ShellCommands.AutoConnect}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
-                <MenuItem Header="Show _Timestamp" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.ShowTimestamp}" />
+                <MenuItem x:Name="TimestampMenu" Header="Show _Timestamp" IsCheckable="True" Command="{x:Static local:ShellCommands.ShowTimestamp}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
                 <Separator />
                 <MenuItem Header="_Backend Settings..." Command="{x:Static local:ShellCommands.ConfigureBackend}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
@@ -57,7 +61,7 @@
         <Grid Grid.Row="3" Margin="8,0,8,8">
             <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <TextBox x:Name="PromptInput" Height="84" AcceptsReturn="True" TextWrapping="NoWrap"
-                     TextChanged="OnPromptChanged"
+                     TextChanged="OnPromptChanged" PreviewKeyDown="OnPromptKeyDown"
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                      AutomationProperties.Name="Message input" />
             <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
