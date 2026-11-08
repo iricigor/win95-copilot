@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using WinChatCopilot.Backend;
 using WinChatCopilot.Settings;
 
@@ -27,6 +28,9 @@ public partial class MainWindow : RetroWindow
     private bool resetting;
     private bool followingTranscript = true;
     private bool updatingTranscript;
+    private DispatcherTimer? waitingTimer;
+    internal int WaitingDots { get; private set; }
+    internal bool IsWaitingForText => waitingTimer?.IsEnabled == true;
     private readonly List<ChatTurn> turns = [];
     public IReadOnlyList<ChatTurn> Turns => turns.AsReadOnly();
 
@@ -84,6 +88,7 @@ public partial class MainWindow : RetroWindow
         Closing += OnClosing;
         Closed += (_, _) =>
         {
+            StopWaitingIndicator(updateHeading: false);
             backend.Changed -= UpdateBackend;
             lifetime.Dispose();
         };
@@ -199,7 +204,42 @@ public partial class MainWindow : RetroWindow
     }
 
     private void RefreshTranscript() =>
-        ChangeTranscript(() => Transcript.Update(turns, backend.Settings.ShowTimestamp));
+        ChangeTranscript(() => Transcript.Update(turns, backend.Settings.ShowTimestamp, WaitingDots));
+
+    private void StartWaitingIndicator()
+    {
+        WaitingDots = 1;
+        waitingTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        waitingTimer.Tick += OnWaitingTick;
+        waitingTimer.Start();
+    }
+
+    private void OnWaitingTick(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(sender, waitingTimer) && activeTurn is not null)
+            AdvanceWaitingIndicator(activeTurn);
+    }
+
+    internal void AdvanceWaitingIndicator(ChatTurn turn)
+    {
+        if (!ReferenceEquals(activeTurn, turn) || !IsWaitingForText || closing || resetting) return;
+        WaitingDots = WaitingDots % 5 + 1;
+        ChangeTranscript(() => Transcript.UpdateWaitingIndicator(WaitingDots));
+    }
+
+    private void StopWaitingIndicator(bool updateHeading = true)
+    {
+        if (waitingTimer is null) return;
+        waitingTimer.Stop();
+        waitingTimer.Tick -= OnWaitingTick;
+        waitingTimer = null;
+        WaitingDots = 0;
+        if (updateHeading)
+            ChangeTranscript(() => Transcript.UpdateWaitingIndicator(0));
+    }
 
     internal Task SaveTranscriptAsync()
     {
@@ -237,6 +277,7 @@ public partial class MainWindow : RetroWindow
         stopRequested = false;
         activeTurn = turn;
         turns.Add(turn);
+        StartWaitingIndicator();
         RefreshTranscript();
         var generation = GenerateAsync(turn);
         pendingGeneration = generation.IsCompleted ? null : generation;
@@ -248,6 +289,7 @@ public partial class MainWindow : RetroWindow
         var pending = pendingGeneration;
         if (pending is null) return;
         stopRequested = true;
+        StopWaitingIndicator();
         backend.CancelGeneration();
         await pending;
     }
@@ -296,6 +338,7 @@ public partial class MainWindow : RetroWindow
                 lastUpdate = Dispatcher.InvokeAsync(() =>
                 {
                     if (!ReferenceEquals(activeTurn, turn) || shutdownComplete) return;
+                    if (chunk.Length != 0) StopWaitingIndicator(updateHeading: false);
                     turn.Response += chunk;
                     RefreshTranscript();
                 }).Task;
@@ -314,6 +357,7 @@ public partial class MainWindow : RetroWindow
         finally
         {
             await lastUpdate;
+            StopWaitingIndicator(updateHeading: false);
             turn.State = finalState;
             turn.FinishedAt = DateTimeOffset.Now;
             RefreshTranscript();
@@ -368,6 +412,7 @@ public partial class MainWindow : RetroWindow
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         if (shutdownComplete) return;
+        StopWaitingIndicator();
         if (!closing && pendingGeneration is null && pendingConnection is null && pendingReset is null && pendingExport is null)
         {
             closing = true;

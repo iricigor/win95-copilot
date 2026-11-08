@@ -57,6 +57,7 @@ The output does not store real prompts, credentials, or user conversations.
 | Text-only streaming/continuation/reset | Actual synthetic adapter/subprocess tests and published gated output/session argument assertions; separately opt-in real suite |
 | SEND/newlines/single-flight/Stop | Published keyboard/newline, busy input/SEND guards, cancellation marker/input and owned settlement; deterministic modifier/empty/duplicate matrices |
 | Progressive Unicode/no diagnostics/responsiveness | Published gated output with menus usable while busy; deterministic split UTF-8/framing/filtering tests; separate real progressive evidence |
+| Waiting for first text | Published one-to-five/reset cycle at bounded half-second cadence, first-text removal/no restart, earlier-message selection/input focus/scroll preservation, single request and Stop before text; deterministic empty/whitespace/final-only/failure/reset/close and export regressions |
 | Scrolling/wrap/timestamps | Published populated scroll-away/return, saved wrap/timestamp toggles and actual timestamp text; exact deterministic layout/follow regressions |
 | Failures and no automatic duplicate prompts | Published synthetic partial failure/modal/input/marker, request-count assertion and explicit Connect; deterministic launch/auth/error cases |
 | UTF-8 transcript/export | Actual native save/path/cancel; exact deterministic empty/multiline/Unicode/timestamps/state/snapshot/overwrite/cancel/write-failure tests |

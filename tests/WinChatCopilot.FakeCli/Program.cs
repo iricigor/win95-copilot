@@ -198,7 +198,13 @@ static async Task<int> ChatAsync(string[] arguments)
     File.AppendAllText("chat.requests.jsonl", JsonSerializer.Serialize(arguments) + "\n");
     File.WriteAllText("chat.started.pending", Environment.ProcessId.ToString());
     File.Move("chat.started.pending", "chat.started", overwrite: true);
-    if (scenario is "pre-failure" or "auth")
+    if (scenario is "delayed-first" or "delayed-final" or "empty" or "delayed-failure" or "whitespace-first")
+    {
+        Emit(new { type = "assistant.message_delta", data = new { deltaContent = "" } });
+        File.WriteAllText("chat.empty", "ready");
+        await WaitForFileAsync("chat.first");
+    }
+    if (scenario is "pre-failure" or "auth" or "delayed-failure")
     {
         Console.Error.Write(scenario == "auth" ? "Synthetic authentication failure. Sign in separately." :
             "\u001b[31mSynthetic submission failure\u001b[0m");
@@ -242,19 +248,20 @@ static async Task<int> ChatAsync(string[] arguments)
             }
         });
     Emit(new { type = "usage", data = new { content = "DIAGNOSTIC_NOT_RESPONSE" } });
-    var first = scenario == "long-stream"
+    var first = scenario == "empty" ? "" : scenario == "whitespace-first" ? " " : scenario == "long-stream"
         ? string.Join("\r\n", Enumerable.Range(0, 150).Select(i => $"synthetic line {i}")) + "\r\n"
         : "first \u001b[";
-    var second = scenario == "long-stream"
+    var second = scenario == "empty" ? "" : scenario == "whitespace-first" ? "text" : scenario == "long-stream"
         ? string.Join("\r\n", Enumerable.Range(150, 20).Select(i => $"synthetic line {i}"))
         : "31m\u20ac\u6f22\U0001f680\u001b[0m\r\nsecond\tline\u001b]0;hidden title\a\nthird";
     var raw = first + second;
-    if (scenario != "final-only")
+    if (scenario is not ("final-only" or "delayed-final" or "empty"))
     {
         var json = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = first } });
         foreach (var part in Encoding.UTF8.GetBytes(json + "\n").Chunk(7))
             await WriteBytesAsync(part);
-        if (scenario is "stream" or "long-stream" or "partial-failure" or "stall" or "with-child") await WaitForFileAsync("chat.continue");
+        if (scenario is "stream" or "long-stream" or "partial-failure" or "stall" or "with-child" or "delayed-first" or "whitespace-first")
+            await WaitForFileAsync("chat.continue");
         var unicodeJson = JsonSerializer.Serialize(new { type = "assistant.message_delta", data = new { deltaContent = second } },
             new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
         foreach (var part in Encoding.UTF8.GetBytes(unicodeJson + "\n").Chunk(1))

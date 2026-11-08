@@ -23,7 +23,7 @@ public sealed class TranscriptView : RichTextBox
 
     internal string Text => new TextRange(Document.ContentStart, Document.ContentEnd).Text;
 
-    internal void Update(IReadOnlyList<ChatTurn> turns, bool timestamps)
+    internal void Update(IReadOnlyList<ChatTurn> turns, bool timestamps, int waitingDots = 0)
     {
         if (Document.Blocks.Count > turns.Count * 2) Document.Blocks.Clear();
         while (Document.Blocks.Count < turns.Count * 2)
@@ -34,6 +34,7 @@ public sealed class TranscriptView : RichTextBox
             paragraph.Inlines.Add(new Run(speaker) { FontWeight = FontWeights.Bold });
             paragraph.Inlines.Add(new Run(":") { FontWeight = FontWeights.Bold });
             paragraph.Inlines.Add(new Run { FontWeight = FontWeights.Normal });
+            paragraph.Inlines.Add(new Run { FontWeight = FontWeights.Normal });
             Document.Blocks.Add(paragraph);
         }
         var paragraphs = Document.Blocks.Cast<Paragraph>().ToArray();
@@ -42,16 +43,27 @@ public sealed class TranscriptView : RichTextBox
             UpdateMessage(paragraphs[i * 2], TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
                 TranscriptDisplay.Message(turns[i].Prompt));
             UpdateMessage(paragraphs[i * 2 + 1], TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
-                TranscriptDisplay.Response(turns[i]));
+                TranscriptDisplay.Response(turns[i]), i == turns.Count - 1 ? waitingDots : 0);
         }
         UpdatePageWidth();
     }
 
-    private static void UpdateMessage(Paragraph paragraph, string timestamp, string message)
+    internal void UpdateWaitingIndicator(int dots)
+    {
+        if (Document.Blocks.LastBlock is not Paragraph paragraph) return;
+        var runs = paragraph.Inlines.Cast<Run>().ToArray();
+        if (dots == 0 && runs[3].Text.Length != 0)
+            UpdateRun(runs[4], " " + runs[4].Text);
+        UpdateRun(runs[3], dots == 0 ? "" : " " + new string('.', dots));
+        UpdatePageWidth();
+    }
+
+    private static void UpdateMessage(Paragraph paragraph, string timestamp, string message, int dots = 0)
     {
         var runs = paragraph.Inlines.Cast<Run>().ToArray();
         UpdateRun(runs[0], timestamp);
-        UpdateRun(runs[3], " " + message);
+        UpdateRun(runs[3], dots == 0 ? "" : " " + new string('.', dots));
+        UpdateRun(runs[4], dots == 0 ? " " + message : message);
     }
 
     private static void UpdateRun(Run run, string text)
@@ -88,7 +100,7 @@ public sealed class TranscriptView : RichTextBox
                 new Typeface(FontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
                 FontSize, Foreground, VisualTreeHelper.GetDpi(this).PixelsPerDip);
             var runs = paragraph.Inlines.OfType<Run>().ToArray();
-            if (runs.Length == 4)
+            if (runs.Length == 5)
             {
                 formatted.SetFontWeight(FontWeights.Bold, runs[0].Text.Length, runs[1].Text.Length);
                 formatted.SetFontWeight(FontWeights.Bold, runs[0].Text.Length + runs[1].Text.Length, 1);
