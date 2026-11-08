@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,15 +11,27 @@ namespace WinChatCopilot;
 public sealed class TranscriptView : RichTextBox
 {
     private bool wordWrap;
+    private readonly Func<bool> highContrast;
 
-    public TranscriptView()
+    public TranscriptView() : this(() => SystemParameters.HighContrast) { }
+
+    internal TranscriptView(Func<bool> highContrast)
     {
+        this.highContrast = highContrast;
+        Resources = new ResourceDictionary { Source = new Uri("/WinChatCopilot;component/RetroTheme.xaml", UriKind.Relative) };
         Document.Blocks.Clear();
         Document.PagePadding = new Thickness(0);
         Document.FontWeight = FontWeights.Normal;
         IsReadOnly = true;
         IsDocumentEnabled = false;
         IsUndoEnabled = false;
+        Loaded += (_, _) =>
+        {
+            SystemParameters.StaticPropertyChanged += OnSystemPropertyChanged;
+            RefreshColors();
+        };
+        Unloaded += (_, _) => SystemParameters.StaticPropertyChanged -= OnSystemPropertyChanged;
+        RefreshColors();
     }
 
     internal string Text => new TextRange(Document.ContentStart, Document.ContentEnd).Text;
@@ -45,7 +58,39 @@ public sealed class TranscriptView : RichTextBox
             UpdateMessage(paragraphs[i * 2 + 1], "Assistant", TranscriptDisplay.Timestamp(turns[i].SubmittedAt, timestamps),
                 TranscriptDisplay.Response(turns[i]), i == turns.Count - 1 ? waitingDots : 0);
         }
+        RefreshColors();
         UpdatePageWidth();
+    }
+
+    private void OnSystemPropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (string.IsNullOrEmpty(args.PropertyName) || args.PropertyName == nameof(SystemParameters.HighContrast))
+            RefreshColors();
+    }
+
+    internal void RefreshColors()
+    {
+        var useSystemColors = highContrast();
+        if (useSystemColors)
+        {
+            SetResourceReference(ForegroundProperty, SystemColors.WindowTextBrushKey);
+            Document.SetResourceReference(TextElement.ForegroundProperty, SystemColors.WindowTextBrushKey);
+            SetResourceReference(BackgroundProperty, SystemColors.WindowBrushKey);
+        }
+        else
+        {
+            Foreground = Document.Foreground = Brushes.Black;
+            Background = Brushes.White;
+        }
+        var index = 0;
+        foreach (var paragraph in Document.Blocks.OfType<Paragraph>())
+        {
+            var name = paragraph.Inlines.OfType<Run>().ElementAt(1);
+            name.SetResourceReference(TextElement.ForegroundProperty, useSystemColors
+                ? SystemColors.WindowTextBrushKey
+                : index % 2 == 0 ? "UserNameBrush" : "AssistantNameBrush");
+            index++;
+        }
     }
 
     internal void UpdateWaitingIndicator(int dots)

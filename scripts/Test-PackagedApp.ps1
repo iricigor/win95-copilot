@@ -25,13 +25,16 @@ if ($RunRealTests -and ([string]::IsNullOrWhiteSpace($CopilotPath) -or -not [IO.
     throw 'Real packaged tests additionally require an absolute verified CopilotPath.'
 }
 [IO.Directory]::CreateDirectory($EvidenceDirectory) | Out-Null
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, System.Drawing
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, PresentationFramework, System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Runtime.InteropServices;
 public static class OwnedDesktop {
+    delegate bool EnumWindowCallback(IntPtr h, IntPtr parameter);
+    [DllImport("user32.dll", SetLastError=true)] static extern bool EnumWindows(EnumWindowCallback callback, IntPtr parameter);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder text, int length);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
@@ -62,6 +65,23 @@ public static class OwnedDesktop {
     public static void Check(IntPtr h, int expected) {
         uint actual; GetWindowThreadProcessId(h, out actual);
         if (actual != expected || actual == 0) throw new InvalidOperationException("Window ownership changed.");
+    }
+    public static bool IsOwned(IntPtr h, int expected) {
+        uint actual; GetWindowThreadProcessId(h, out actual);
+        return actual != 0 && actual == expected;
+    }
+    public static IntPtr[] Windows(int expected, string title) {
+        var windows = new System.Collections.Generic.List<IntPtr>();
+        if (!EnumWindows((h, parameter) => {
+            uint actual; GetWindowThreadProcessId(h, out actual);
+            if (actual == expected) {
+                var text = new System.Text.StringBuilder(512);
+                GetWindowText(h, text, text.Capacity);
+                if (text.ToString() == title) windows.Add(h);
+            }
+            return true;
+        }, IntPtr.Zero)) throw new Win32Exception();
+        return windows.ToArray();
     }
     public static string ProbeDesktop() {
         // A non-input desktop is never switched into: UIA/keyboard input targets the current desktop.
@@ -189,12 +209,24 @@ function By-Name([string] $Name, $Parent = $script:main) {
     return Find-Element $Parent ([Windows.Automation.AutomationElement]::NameProperty) $Name
 }
 function Owned-Window([string] $Name) {
-    $condition = New-Object Windows.Automation.AndCondition(
-        (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ProcessIdProperty, $script:process.Id)),
-        (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, $Name)))
-    $element = [Windows.Automation.AutomationElement]::RootElement.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
-    if ($null -ne $element) { Assert-Owned $element }
-    return $element
+    foreach ($handle in [OwnedDesktop]::Windows($script:process.Id, $Name)) {
+        if (-not [OwnedDesktop]::IsOwned($handle, $script:process.Id)) { continue }
+        # Dismissed modal handles can disappear between enumeration and UIA lookup.
+        try {
+            $element = [Windows.Automation.AutomationElement]::FromHandle($handle)
+            if ($element.Current.ProcessId -ne $script:process.Id) {
+                if (-not [OwnedDesktop]::IsOwned($handle, $script:process.Id)) { continue }
+                throw 'Live window UI Automation ownership does not match its verified process.'
+            }
+        }
+        catch [Windows.Automation.ElementNotAvailableException] {
+            if ([OwnedDesktop]::IsOwned($handle, $script:process.Id)) { throw }
+            continue
+        }
+        Assert-True (-not $script:process.HasExited) 'Test application exited unexpectedly.'
+        return $element
+    }
+    return $null
 }
 function Invoke-Element($Element) {
     Assert-Owned $Element
@@ -258,6 +290,28 @@ function Transcript {
     $element = By-Id 'Transcript'
     Assert-Owned $element
     return $element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(-1)
+}
+function Assert-RoleColors([string] $UserName = 'User') {
+    $element = By-Id 'Transcript'
+    Assert-Owned $element
+    $document = $element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange
+    $remaining = $document.Clone()
+    $system = [System.Drawing.SystemColors]::WindowText
+    # WPF exposes the UIA foreground attribute as packed RGB, not Win32 COLORREF.
+    $plain = if ([System.Windows.SystemParameters]::HighContrast) { 65536 * $system.R + 256 * $system.G + $system.B } else { 0 }
+    $colors = if ([System.Windows.SystemParameters]::HighContrast) { @($plain, $plain) } else { @(0x000080, 0x008080) }
+    $names = @($UserName, 'Assistant')
+    foreach ($index in 0..1) {
+        $heading = $remaining.FindText($names[$index] + ':', $false, $false)
+        Assert-True ($null -ne $heading) "Role heading $index was not available."
+        $name = $heading.Clone()
+        [void]$name.MoveEndpointByUnit([Windows.Automation.Text.TextPatternRangeEndpoint]::End, [Windows.Automation.Text.TextUnit]::Character, -1)
+        Assert-True ($name.GetAttributeValue([Windows.Automation.TextPattern]::ForegroundColorAttribute) -eq $colors[$index]) "Role $index did not use its exact name color."
+        $colon = $heading.Clone()
+        [void]$colon.MoveEndpointByUnit([Windows.Automation.Text.TextPatternRangeEndpoint]::Start, [Windows.Automation.Text.TextUnit]::Character, $names[$index].Length)
+        Assert-True ($colon.GetAttributeValue([Windows.Automation.TextPattern]::ForegroundColorAttribute) -eq $plain) "Role $index colored its colon."
+        $remaining.MoveEndpointByRange([Windows.Automation.Text.TextPatternRangeEndpoint]::Start, $heading, [Windows.Automation.Text.TextPatternRangeEndpoint]::End)
+    }
 }
 function Record([string] $Name) { $results.Add([pscustomobject]@{ Check = $Name; Outcome = 'Passed'; Utc = [DateTime]::UtcNow.ToString('o') }) }
 function Assert-ActionButtons($Window, [string[]] $Names) {
@@ -559,6 +613,12 @@ try {
     Assert-True ((Requests).Count -eq $requestsBeforeRename) 'Rename submitted another backend request.'
     Rename-User 'User'
     Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Second rename moved message selection.'
+    Rename-User 'Assistant'
+    Assert-RoleColors 'Assistant'
+    Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Same-name role coloring moved selection.'
+    Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Same-name role coloring moved reading position.'
+    Rename-User 'User'
+    Assert-RoleColors
     Record 'actual retroactive rename during long stream preserves selection/input focus/scroll-away and request count'
     $textBeforeFont=Transcript
     foreach ($font in @('Courier New','Lucida Console','Microsoft Sans Serif')) {
@@ -568,9 +628,11 @@ try {
         Wait-For { (By-Id 'PromptInput').Current.HasKeyboardFocus } "font $font restored input focus" 2
         Assert-True ((Transcript) -ceq $textBeforeFont) "Font $font changed transcript text."
         Assert-True ((Requests).Count -eq $requestsBeforeRename) "Font $font submitted another backend request."
+        Assert-RoleColors
     }
     [OwnedDesktop]::Capture($script:process.MainWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'font-selected.png')) | Out-Null
     Record 'actual installed font submenu choices/persistence and delayed-stream text/selection/focus/scroll/request preservation'
+    Record 'actual native role foreground colors/black colons, equal Assistant user name, all fonts and selected streamed text'
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
     Wait-For { (Status) -like 'Copilot ready*' } 'scroll fixture completion'
     Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Actual streaming forced a scrolled-away reader to bottom.'

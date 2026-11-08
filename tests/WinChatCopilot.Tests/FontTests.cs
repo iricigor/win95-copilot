@@ -235,12 +235,15 @@ public class FontTests
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void FontChangesDuringDelayedStreamPreserveSelectionFocusScrollAndSession(bool followAgain) => OnSta(async () =>
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void FontChangesDuringDelayedStreamPreserveSelectionFocusScrollAndSession(bool followAgain, bool timestamps) => OnSta(async () =>
     {
         using var fixture = new Fixture("long-stream");
         var backend = fixture.Controller();
+        fixture.Store.Save(fixture.Store.Load() with { ShowTimestamp = timestamps, UserName = "Assistant" });
         var window = new MainWindow(backend);
         try
         {
@@ -271,6 +274,7 @@ public class FontTests
                 Assert.InRange(Math.Abs(view.VerticalOffset - offset), 0, 1);
                 Assert.Equal(canonical, view.Text);
                 Assert.Same(session, backend.Session);
+                RoleColorTests.AssertColors(view, SystemParameters.HighContrast);
             }
             if (followAgain)
             {
@@ -284,7 +288,8 @@ public class FontTests
             Assert.True(input.IsKeyboardFocusWithin);
             if (followAgain) Assert.InRange(view.ExtentHeight - view.ViewportHeight - view.VerticalOffset, 0, 1);
             else Assert.InRange(Math.Abs(view.VerticalOffset - offset), 0, 1);
-            Assert.Equal(TranscriptDisplay.Format(window.Turns, false), view.Text);
+            Assert.Equal(TranscriptDisplay.Format(window.Turns, timestamps, userName: "Assistant"), view.Text);
+            RoleColorTests.AssertColors(view, SystemParameters.HighContrast);
             var request = Assert.Single(File.ReadAllLines(Path.Combine(fixture.Work, "chat.requests.jsonl")));
             Assert.Equal("synthetic font prompt \u6f22\nmultiline", JsonSerializer.Deserialize<string[]>(request)![^1]);
             Assert.Same(session, backend.Session);

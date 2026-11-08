@@ -85,6 +85,14 @@ turn's submission-time semantics and exports match the displayed headings. Times
 and failure/cancellation text remains normal weight. This does not change the
 Windows 3.1 chrome or introduce Markdown rendering.
 
+Only speaker-name runs use the shared UserNameBrush (navy `#000080`) and
+AssistantNameBrush (teal `#008080`); roles, not label comparisons, choose colors.
+Timestamps, colons, dots, markers and bodies remain black. Names and colons
+retain their existing bold weight; other text stays normal weight. Both fixed
+name colors meet 4.5:1 contrast on white. Windows high-contrast mode uses live
+system window/text brushes instead, including on existing headings, with no
+OS-setting changes or color markup in copied/exported text.
+
 ## Automation-first verification and optional local review
 
 Run the README restore/build/test commands and automate feasible command,

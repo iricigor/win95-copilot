@@ -27,6 +27,9 @@ retained run-owned process ID before interaction; keyboard input additionally
 requires the verified owned foreground window. No unrelated window input is
 permitted. The UIA fixture uses Copy/Paste with synthetic text, so it changes
 the desktop clipboard; do not use it while relying on clipboard contents.
+Modal discovery filters native top-level windows by the owned PID and title
+before creating UIA elements, avoiding privileged unrelated processes. A window
+destroyed during dismissal polling is absent; live ownership mismatches fail.
 
 Each launch uses a separate settings/work directory under the selected evidence
 directory. Credentials are removed from synthetic subprocess environments.
@@ -64,6 +67,7 @@ The output does not store real prompts, credentials, or user conversations.
 | Preferences/restart | Published restart with persisted values, Auto-connect and empty new conversation; corrupt/locked/unreadable settings regressions |
 | Configurable user name | Published retro dialog/default Enter/Cancel/Escape, Unicode trimming/inline rejection, streaming retroactive rename with selection/focus/scroll/request-count preservation, native configured-name export and restart/backend-save preservation; deterministic old/invalid/locked settings, long names and immutable export snapshot |
 | Curated text fonts | Published Options submenu selects all three installed choices, checks actual UIA font attributes on both panes, preserves delayed-stream text/selection/input focus/scroll/request count, and retains the preference across restart/backend saves; deterministic missing-font guidance, checked states, old/invalid/locked settings and selected-font bold/multiline/Unicode width/wrap/scroll tests |
+| Role-colored names | Published UIA exact navy/teal name foreground and black colon checks, including a user named Assistant and all offered fonts during selected/scrolled-away streaming; deterministic multiple roles, timestamps/dots/markers/bodies, unchanged text/export, measured contrast and system high-contrast seam |
 | Shutdown/ownership | Published File/Alt+F4/system Close/system-box double-click and active generation with actual synthetic child; deterministic unrelated sentinel tests |
 
 Caption dragging, detailed popup pixel/typography comparison, genuine
