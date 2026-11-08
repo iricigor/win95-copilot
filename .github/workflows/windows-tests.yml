@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   build-and-test:
+    outputs:
+      eligible: ${{ steps.classify.outputs.eligible }}
+      revision: ${{ steps.classify.outputs.revision }}
     runs-on: windows-latest
     timeout-minutes: 10
     env:
@@ -18,6 +21,10 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
@@ -35,6 +42,10 @@ jobs:
           }
           & $dotnet test .\WinChatCopilot.sln --configuration Release --no-build --no-restore --logger trx --results-directory .\TestResults --blame-hang --blame-hang-timeout 2m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Classify complete push diff
+        id: classify
+        shell: pwsh
+        run: .\scripts\Get-PrereleaseDecision.ps1
       - name: Upload test diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -42,3 +53,99 @@ jobs:
           name: windows-test-results
           path: TestResults
           if-no-files-found: ignore
+
+  package:
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-and-test.outputs.eligible == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      revision: ${{ steps.packages.outputs.revision }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Reuse original run assets or package both variants
+        id: packages
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATED_REVISION: ${{ needs.build-and-test.outputs.revision }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:VALIDATED_REVISION -cne $env:GITHUB_SHA) { throw 'Validation revision mismatch.' }
+          $output = Join-Path $env:RUNNER_TEMP 'prerelease-packages'
+          $name = "prerelease-packages-$env:GITHUB_RUN_ID"
+          $json = gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect retained run artifacts.' }
+          $existing = @($json | ConvertFrom-Json | ForEach-Object { $_.artifacts } | Where-Object { $_.name -ceq $name })
+          if ($existing.Count -gt 1) { throw 'Duplicate package artifacts.' }
+          if ($existing.Count) {
+            if ($existing[0].expired) { throw 'Original run packages expired; do not replace release assets.' }
+            gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name $name --dir $output
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot restore original run packages.' }
+            "reuse=true" >> $env:GITHUB_OUTPUT
+          } else {
+            [xml] $props = Get-Content .\Directory.Build.props -Raw
+            $version = "$($props.Project.PropertyGroup.Version)-preview.$env:GITHUB_RUN_NUMBER"
+            foreach ($contained in @($false, $true)) {
+              $destination = Join-Path $env:RUNNER_TEMP "publish-$contained"
+              .\scripts\Publish-App.ps1 -OutputDirectory $destination -ReleaseVersion $version -SourceRevision $env:GITHUB_SHA -SelfContained:$contained
+              if (-not (Test-Path -LiteralPath $output)) { New-Item $output -ItemType Directory | Out-Null }
+              Get-ChildItem -LiteralPath $destination -File | Copy-Item -Destination $output
+            }
+            "reuse=false" >> $env:GITHUB_OUTPUT
+          }
+          Import-Module .\scripts\Prerelease.psm1 -Force
+          [xml] $props = Get-Content .\Directory.Build.props -Raw
+          Get-PrereleasePackages $output $props.Project.PropertyGroup.Version $env:GITHUB_SHA $env:GITHUB_RUN_NUMBER
+          "revision=$env:GITHUB_SHA" >> $env:GITHUB_OUTPUT
+      - name: Retain exact packages for safe retries
+        if: steps.packages.outputs.reuse != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: prerelease-packages-${{ github.run_id }}
+          path: ${{ runner.temp }}\prerelease-packages\*
+          if-no-files-found: error
+          retention-days: 90
+
+  publish:
+    needs: [build-and-test, package]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-and-test.result == 'success' && needs.package.result == 'success' && needs.build-and-test.outputs.eligible == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: prerelease-${{ github.run_id }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: prerelease-packages-${{ github.run_id }}
+          path: ${{ runner.temp }}\prerelease-packages
+      - name: Verify, upload and publish draft prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATED_REVISION: ${{ needs.build-and-test.outputs.revision }}
+          PACKAGED_REVISION: ${{ needs.package.outputs.revision }}
+          VALIDATION_RESULT: ${{ needs.build-and-test.result }}
+          PACKAGING_RESULT: ${{ needs.package.result }}
+        run: |
+          if ($env:PACKAGED_REVISION -cne $env:VALIDATED_REVISION) { throw 'Package revision mismatch.' }
+          .\scripts\Publish-GitHubPrerelease.ps1 -PackageDirectory (Join-Path $env:RUNNER_TEMP 'prerelease-packages') -ValidatedRevision $env:VALIDATED_REVISION -ValidationResult $env:VALIDATION_RESULT -PackagingResult $env:PACKAGING_RESULT

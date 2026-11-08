@@ -138,6 +138,13 @@ manifest path>'` verifies archive/file hashes, completeness and actual runtime
 deployment metadata without launching the app. Packaging invokes it before
 reporting success. This contract does not itself publish GitHub releases.
 
+The Windows tests workflow publishes a draft-first, verified GitHub prerelease
+after each non-documentation push to main, with both runtime variants and their
+distinct manifests. Full push classification, exact-SHA validation, least-privilege
+permissions and original-asset retry behavior are documented in
+[automatic prereleases](docs/automatic-prereleases.md). Routine checks still run
+for documentation pushes and PRs; those events do not publish.
+
 `scripts\Test-PackagedApp.ps1` runs opt-in owned-window desktop checks against
 an already published executable and actual synthetic subprocess helper. It
 requires Windows PowerShell 5.1/STA for the OS UI Automation assemblies.
