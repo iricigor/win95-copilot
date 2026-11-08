@@ -1,6 +1,6 @@
 # win95-copilot
 
-![WinChat-Copilot 0.1.0 showing a hi message and Copilot's response](docs/images/winchat-copilot.png)
+![WinChat-Copilot 0.1.0 showing a conversation and haiku about Windows 95 and Copilot](docs/images/winchat-copilot.png)
 
 ## Application scaffold
 
