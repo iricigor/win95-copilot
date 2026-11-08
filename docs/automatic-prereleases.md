@@ -2,6 +2,9 @@
 
 The Windows tests workflow keeps restore, Release build and all deterministic
 tests on PRs, manual validation and every `main` push, including documentation.
+Process/chat fixture teardown waits at most two seconds for Windows sharing or
+lock violations after owned process exit; persistent locks and other errors
+still fail. Regression tests reproduce both transient and persistent locks.
 Only a live **push to `refs/heads/main`** can publish. PRs, manual runs, other
 branches and tag events cannot reach the write-capable job. No additional
 credentials, Copilot authentication, stable version bump or manual release run

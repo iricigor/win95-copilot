@@ -328,7 +328,7 @@ public class ProcessTransportTests
             }
 
             timeout.Dispose();
-            Directory.Delete(DirectoryPath, recursive: true);
+            FixtureDirectory.Delete(DirectoryPath);
         }
     }
 }
