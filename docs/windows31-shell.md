@@ -59,11 +59,17 @@ persisted choices before the settings task.
 ## Automation-first verification and optional local review
 
 Run the README restore/build/test commands and automate feasible command,
-layout, window-state, dialog and interaction checks in an isolated authorized
-test environment, using only synthetic text. Do not automate the user's working
-desktop. Use the steps below as coverage guidance and optional human review,
+layout, window-state, dialog and interaction checks using synthetic text and
+isolated settings. Build and launch a run-owned local app instance. Prefer an
+isolated desktop where functional; local interactive testing is authorized for
+verified test-app process IDs/window handles when input cannot work in isolation.
+Use Windows UI Automation/Win32 controls where available, recheck ownership
+before input, and never interact with unrelated windows or real user settings.
+Close owned windows/helpers after testing. Use the steps below as coverage guidance and optional human review,
 not a mandatory manual checklist or sign-off.
 
+Do not classify menus, keyboard or dialogs as unavailable merely because an
+initial non-input desktop probe failed; attempt owned-window local testing first.
 If actual desktop appearance or an interaction cannot reasonably be verified
 automatically, make bounded best-effort checks and save/read back a non-blocking
 note on Epic #1 linking the task/PR/revision, attempts and remaining checks.

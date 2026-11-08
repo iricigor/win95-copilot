@@ -119,9 +119,27 @@ feasible, using synthetic fixtures and an isolated authorized test environment.
 Use existing test infrastructure before adding a bounded helper; do not require
 a large desktop automation framework or a human checklist/sign-off.
 
-Attempt real-Copilot checks automatically when existing explicit authorization,
-authentication and compatible prerequisites permit. Missing real-service or
-isolated-desktop access, or an interaction/visual check that cannot reasonably be
+Local application testing is explicitly user-authorized for this Epic. Build
+the current revision, launch a run-owned app instance on this Windows PC, and
+exercise its menus, dialogs, keyboard/input, window states and applicable
+end-to-end behavior with available Windows UI Automation/Win32 controls. Prefer
+an isolated test desktop where functional, but do not stop at a non-input desktop
+if it cannot exercise popups or keyboard interaction: the local interactive
+desktop is authorized for the test application's own windows only. Identify
+windows by verified owned process IDs/handles, not title or screen coordinates
+alone. Verify ownership before sending input; do not interact with other apps.
+
+Use synthetic prompts/transcripts and isolated application settings/output paths.
+Existing Copilot authentication on this PC and bounded harmless real-service
+tests are explicitly authorized; verify actual executable/version, subprocess
+access and authenticated readiness, then run applicable real-Copilot checks
+automatically. Do not request renewed permission unless account, environment,
+data exposure, permissions or testing scope materially changes. Do not install,
+update or log into Copilot, inspect credentials or alter saved authentication.
+Close owned test windows and settle only run-owned processes after checks.
+
+Missing real-service or local-desktop access after an actual bounded attempt,
+or an interaction/visual check that cannot reasonably be
 automated, is a non-blocking verification limitation, not a mandatory guarantee
 of success. Make a bounded best-effort check, distinguish actual passes from
 unverified behavior, and save/read back a non-blocking Epic note with the task,
@@ -132,7 +150,7 @@ Never count fake tests as real evidence or resource renders as visual acceptance
 Actual implementation/test failures, missing source or reference inputs required
 to implement the task, unsafe or incompatible behavior, permissions, ownership,
 and applicable required CI/reviews remain blockers. Do not weaken checks, invent
-evidence, obtain credentials, or automate the user's working desktop to proceed.
+evidence, obtain credentials, or automate unrelated desktop windows to proceed.
 
 Read enough code to follow existing patterns and reuse helpers. Preserve intended
 behavior, saved-data compatibility, type safety, and truthful error handling.
@@ -144,9 +162,10 @@ tests, and linters. If the task establishes the first tooling, implement only
 the tooling required by that task; do not claim nonexistent checks passed.
 For documentation-only tasks, use documentation validation if it exists.
 
-Use synthetic data and isolated validation. Never automate the user's working
-desktop, modify real user settings/conversations, or terminate unrelated
-processes. Only application-owned processes may be cleaned up by specific ID.
+Use synthetic data and isolated validation. Local interactive app-window testing
+is permitted as described above; never automate unrelated windows, modify real
+user settings/conversations, or terminate unrelated processes. Only
+application-owned processes may be cleaned up by specific ID.
 Read relevant GitHub image attachments before implementing visual requirements;
 if unavailable, report the missing evidence instead of guessing.
 
