@@ -297,8 +297,9 @@ function Assert-RoleColors([string] $UserName = 'User') {
     $document = $element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange
     $remaining = $document.Clone()
     $system = [System.Drawing.SystemColors]::WindowText
-    $plain = if ([System.Windows.SystemParameters]::HighContrast) { $system.R + 256 * $system.G + 65536 * $system.B } else { 0 }
-    $colors = if ([System.Windows.SystemParameters]::HighContrast) { @($plain, $plain) } else { @(0x800000, 0x808000) }
+    # WPF exposes the UIA foreground attribute as packed RGB, not Win32 COLORREF.
+    $plain = if ([System.Windows.SystemParameters]::HighContrast) { 65536 * $system.R + 256 * $system.G + $system.B } else { 0 }
+    $colors = if ([System.Windows.SystemParameters]::HighContrast) { @($plain, $plain) } else { @(0x000080, 0x008080) }
     $names = @($UserName, 'Assistant')
     foreach ($index in 0..1) {
         $heading = $remaining.FindText($names[$index] + ':', $false, $false)
