@@ -10,6 +10,7 @@ namespace WinChatCopilot;
 public class RetroWindow : Window
 {
     private ContextMenu? systemMenu;
+    private (int Timestamp, Point Position)? lastSystemBoxPress;
 
     public RetroWindow()
     {
@@ -56,26 +57,51 @@ public class RetroWindow : Window
         base.OnPreviewKeyDown(e);
     }
 
-    protected override void OnPreviewMouseDoubleClick(MouseButtonEventArgs e)
+    protected override void OnPreviewMouseDown(MouseButtonEventArgs e)
     {
         if (e.ChangedButton == MouseButton.Left && e.OriginalSource is DependencyObject source)
         {
             for (var current = source; current is not null;
                  current = current is Visual ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
             {
-                if (current is Button { Tag: "SystemMenu" })
+                if (current is Button { Tag: "SystemMenu" } button)
                 {
-                    systemMenu?.SetCurrentValue(ContextMenu.IsOpenProperty, false);
-                    SystemCommands.CloseWindowCommand.Execute(null, this);
-                    e.Handled = true;
+                    if (!TryCloseSystemBoxPress(e))
+                        lastSystemBoxPress = (e.Timestamp, e.GetPosition(button));
                     break;
                 }
-                if (current == this)
-                    break;
+                if (current == this) break;
             }
         }
-        base.OnPreviewMouseDoubleClick(e);
+        base.OnPreviewMouseDown(e);
     }
+
+    private bool TryCloseSystemBoxPress(MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || lastSystemBoxPress is not { } first ||
+            Template.FindName("SystemMenuButton", this) is not Button button)
+            return false;
+        var position = e.GetPosition(button);
+        var dpi = VisualTreeHelper.GetDpi(button);
+        if (!IsSecondSystemBoxPress(first.Timestamp, e.Timestamp, first.Position, position,
+                new Size(button.ActualWidth, button.ActualHeight), GetDoubleClickTime(),
+                new Size(GetSystemMetricsForDpi(36, (uint)(96 * dpi.DpiScaleX)) / dpi.DpiScaleX,
+                    GetSystemMetricsForDpi(37, (uint)(96 * dpi.DpiScaleY)) / dpi.DpiScaleY)))
+            return false;
+        lastSystemBoxPress = null;
+        systemMenu?.SetCurrentValue(ContextMenu.IsOpenProperty, false);
+        SystemCommands.CloseWindowCommand.Execute(null, this);
+        e.Handled = true;
+        return true;
+    }
+
+    internal static bool IsSecondSystemBoxPress(int firstTime, int nextTime, Point first, Point next,
+        Size buttonSize, uint doubleClickTime, Size doubleClickArea) =>
+        unchecked((uint)(nextTime - firstTime)) <= doubleClickTime &&
+        first.X >= 0 && first.Y >= 0 && first.X < buttonSize.Width && first.Y < buttonSize.Height &&
+        next.X >= 0 && next.Y >= 0 && next.X < buttonSize.Width && next.Y < buttonSize.Height &&
+        Math.Abs(next.X - first.X) <= doubleClickArea.Width / 2 &&
+        Math.Abs(next.Y - first.Y) <= doubleClickArea.Height / 2;
 
     private void OpenSystemMenu()
     {
@@ -89,6 +115,11 @@ public class RetroWindow : Window
     private ContextMenu CreateSystemMenu()
     {
         var menu = new ContextMenu { Resources = Resources };
+        // The first click opens a popup that can capture the second click away from the window.
+        menu.AddHandler(Mouse.PreviewMouseDownEvent,
+            new MouseButtonEventHandler((_, e) => TryCloseSystemBoxPress(e)), handledEventsToo: true);
+        menu.AddHandler(Mouse.PreviewMouseDownOutsideCapturedElementEvent,
+            new MouseButtonEventHandler((_, e) => TryCloseSystemBoxPress(e)), handledEventsToo: true);
         menu.SetResourceReference(StyleProperty, typeof(ContextMenu));
         Add("_Restore", SystemCommands.RestoreWindowCommand);
         Add("_Move", ShellCommands.Move);
@@ -127,4 +158,10 @@ public class RetroWindow : Window
 
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetricsForDpi(int index, uint dpi);
 }

@@ -496,8 +496,10 @@ try {
     Close-App 'AltF4'
     Start-App 'system'
     Close-App 'System'
-    Start-App 'system-box'
-    Close-App 'SystemBoxDoubleClick'
+    foreach($attempt in 1..3) {
+        Start-App "system-box-$attempt"
+        Close-App 'SystemBoxDoubleClick'
+    }
     Start-App 'active-close' $true
     Wait-For { (Status) -like 'Copilot ready*' } 'active close readiness'
     Scenario 'with-child'
