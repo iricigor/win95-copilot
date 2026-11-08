@@ -46,15 +46,18 @@ SEND/Stop surfaces and status bar.
 File Exit, system-menu actions, normal Alt+F4, and Help/About work. About is
 owned/modal, displays generated application metadata, and closes with OK,
 Enter, Escape or its system menu. Help in the utility area shares About's
-command. No backend is started.
+command. Backend Settings and Connect now share commands between the utility
+area and Options. The owned settings dialog uses the same retro resources,
+supports Browse/OK/Cancel, preserves preferences and shows validation errors.
+Auto-connect is persisted and checked truthfully; connection checks are asynchronous.
 
 Save Transcript (#13), Clear Window (#12), Edit and send/wrap/timestamp options
-(#11), configuration/connect/Auto-connect (#8), Send (#9) and Stop (#10) are
+(#11), Send (#9) and Stop (#10) are
 visibly disabled through shared commands. There are no clickable no-op stubs or
 fake connected/ready status. The input is editable and supports ordinary text
 editing; this does not yet enable submission or implement either send shortcut.
-The transcript is read-only. Preference check states are not represented as
-persisted choices before the settings task.
+The transcript is read-only. Only Auto-connect is enabled as a preference;
+other controls remain disabled until their behavior is implemented.
 
 ## Automation-first verification and optional local review
 
@@ -100,9 +103,10 @@ remain blockers; missing manual review alone does not block delivery.
    synthetic transcript text in a test fixture to inspect vertical/horizontal
    scroll arrows/thumbs. Do not count an empty pane as scroll-bar verification.
 6. Relaunch independently to check File Exit, system-menu Close, system-box
-   double-click and Alt+F4. Each must exit the no-backend process normally.
+   double-click and Alt+F4. Each must exit normally, settling owned readiness
+   work if a connection check is in progress.
 
 Record actual failures as blockers rather than checking off appearance from XAML.
 Record unavailable visual/interaction evidence as non-blocking Epic limitations.
 Later tasks own generation cleanup, actual Edit menu behavior, preference
-persistence, streaming, backend discovery and the assembled product checklist.
+streaming and the assembled product checklist.

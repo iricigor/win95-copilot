@@ -184,3 +184,43 @@ define an application policy. Do not reset working saved credentials to obtain
 that evidence. Fake-CLI tests in #6 may exercise application timeout logic, but
 cannot prove real Copilot service behavior. No broader provider, production
 adapter, credential reset, or arbitrary application default is introduced here.
+
+## Application discovery and readiness
+
+Task #8 implements connection preparation only. The app pins the verified
+bundled 1.0.81 via `--no-auto-update`; it rejects other versions rather than
+assuming their permission/framing behavior is compatible. No install/update/login
+is invoked. A selected `.exe` must be trusted by the user; choosing an arbitrary
+executable does not make it a supported provider.
+
+Automatic discovery uses the first application named `copilot.exe` in PATH,
+then the documented portable-package roots
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages` and
+`%PROGRAMFILES%\WinGet\Packages`, restricted to `GitHub.Copilot_*` package
+directories containing `copilot.exe`. The
+[WinGet settings reference](https://learn.microsoft.com/en-us/windows/package-manager/winget/settings#portablepackageuserroot-setting)
+documents these defaults and configurable roots; the
+[1.0.81 installer manifest](https://github.com/microsoft/winget-pkgs/blob/master/manifests/g/GitHub/Copilot/v1.0.81/GitHub.Copilot.installer.yaml)
+confirms a portable `copilot.exe`. The actual user-root package was observed
+locally on 2026-11-08. No guessed npm, release-download, version-specific, or
+custom package directory is searched. Configure those installations explicitly
+or expose their actual executable on PATH.
+
+Readiness starts version and inference subprocesses through the existing
+`ProcessTransport`. It uses an app-isolated CLI home/working directory, the
+same zero-tool restrictions above, and a new UUID. Existing secure CLI
+authentication/inherited supported token variables are used without reading,
+collecting or saving credentials. No user's prior conversations or CLI
+configuration are loaded. A short synthetic connection prompt costs one normal
+service request; Auto-connect defaults off. Missing configuration guidance
+still appears with Auto-connect off, without a service call.
+
+The check requires successful OS exit, empty stderr, complete valid JSONL,
+an assistant response without tool requests/terminal escapes, at least one
+model call with zero tools, and a matching successful session result.
+Failure is actionable and never retried automatically. Closing cancels/settles
+owned work. Readiness output is bounded to 1 MiB per stream; this is a diagnostic
+memory bound, not a response-latency SLA. The deliberately deferred production
+stall policy remains unchanged: connection preparation is cancellable by Exit,
+not assigned an invented provider timeout. A readiness success reflects that
+request, not a permanent network connection or implemented user-chat behavior.

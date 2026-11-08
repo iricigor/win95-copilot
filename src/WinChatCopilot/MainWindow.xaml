@@ -30,10 +30,12 @@
                 <MenuItem Header="Send with _Ctrl+Enter" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.SendWithControlEnter}" />
                 <Separator />
                 <MenuItem Header="_Word Wrap" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.WordWrap}" />
-                <MenuItem Header="_Auto-connect on Startup" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.AutoConnect}" />
+                <MenuItem x:Name="AutoConnectMenu" Header="_Auto-connect on Startup" IsCheckable="True" Command="{x:Static local:ShellCommands.AutoConnect}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
                 <MenuItem Header="Show _Timestamp" IsEnabled="False" IsCheckable="True" Command="{x:Static local:ShellCommands.ShowTimestamp}" />
                 <Separator />
-                <MenuItem Header="_Backend Settings..." IsEnabled="False" Command="{x:Static local:ShellCommands.ConfigureBackend}" />
+                <MenuItem Header="_Backend Settings..." Command="{x:Static local:ShellCommands.ConfigureBackend}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_About WinChat-Copilot..." Command="{x:Static local:ShellCommands.About}"
@@ -41,8 +43,10 @@
             </MenuItem>
         </Menu>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,6">
-            <Button Content="_Connect" IsEnabled="False" Command="{x:Static local:ShellCommands.Connect}" Margin="0,0,6,0" />
-            <Button Content="_Settings..." IsEnabled="False" Command="{x:Static local:ShellCommands.ConfigureBackend}" Margin="0,0,6,0" />
+            <Button Content="_Connect" Command="{x:Static local:ShellCommands.Connect}" Margin="0,0,6,0"
+                    CommandTarget="{Binding ElementName=ShellWindow}" />
+            <Button Content="_Settings..." Command="{x:Static local:ShellCommands.ConfigureBackend}" Margin="0,0,6,0"
+                    CommandTarget="{Binding ElementName=ShellWindow}" />
             <Button Content="_Help" Command="{x:Static local:ShellCommands.About}"
                     CommandTarget="{Binding ElementName=ShellWindow}" />
         </StackPanel>
@@ -64,7 +68,7 @@
         <Border Grid.Row="4" BorderBrush="#808080" BorderThickness="1,1,0,0" Margin="3,0,3,3">
             <Border BorderBrush="White" BorderThickness="0,0,1,1">
                 <TextBlock x:Name="BackendStatus" Margin="4,3"
-                           Text="Backend unavailable - configuration is not implemented yet." />
+                           Text="Backend unavailable - not connected." />
             </Border>
         </Border>
     </Grid>

@@ -16,6 +16,8 @@ File.WriteAllText($"{pidFile}.pending", Environment.ProcessId.ToString());
 File.Move($"{pidFile}.pending", pidFile, overwrite: true);
 switch (scenario)
 {
+    case "--no-auto-update":
+        return await ReadinessAsync(args);
     case "stream":
         await WriteBytesAsync(Encoding.UTF8.GetBytes("first "));
         await WaitForFileAsync("continue");
@@ -69,6 +71,56 @@ switch (scenario)
         else if (scenario == "wrong-prompt")
         {
             received[^1] = "incorrect";
+        }
+
+        static async Task<int> ReadinessAsync(string[] arguments)
+        {
+            var scenario = File.Exists("readiness-scenario") ? File.ReadAllText("readiness-scenario") : "ready";
+            if (arguments.Contains("--version"))
+            {
+                Console.WriteLine(scenario == "version" ? "GitHub Copilot CLI 9.9.9." : "GitHub Copilot CLI 1.0.81.");
+                return 0;
+            }
+            File.WriteAllText("readiness.arguments.json", JsonSerializer.Serialize(arguments));
+            File.WriteAllText("readiness.home", Environment.GetEnvironmentVariable("COPILOT_HOME"));
+            File.WriteAllText("readiness.started", Environment.ProcessId.ToString());
+            if (scenario == "auth")
+            {
+                Console.Error.Write("Synthetic authentication failure. Sign in separately.");
+                return 1;
+            }
+            if (scenario == "stall")
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30));
+                return 75;
+            }
+            if (scenario == "malformed")
+            {
+                Console.Write("{not-json}");
+                return 0;
+            }
+            if (scenario == "missing-fields")
+            {
+                Console.WriteLine("{\"type\":\"assistant.message\",\"data\":{}}");
+                return 0;
+            }
+            if (scenario == "no-evidence") return 0;
+            var session = arguments.Single(arg => arg.StartsWith("--session-id="))["--session-id=".Length..];
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                type = "model.model_call_success",
+                data = new { toolCount = scenario == "tools" ? 1 : 0, requestCapture = new { tools = Array.Empty<object>() } }
+            }));
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                type = "assistant.message",
+                data = new { content = "READY", toolRequests = Array.Empty<object>() }
+            }));
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                type = "result", sessionId = scenario == "session" ? Guid.NewGuid().ToString() : session, exitCode = 0
+            }));
+            return 0;
         }
 
         Console.Write(JsonSerializer.Serialize(new
