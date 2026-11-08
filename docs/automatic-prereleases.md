@@ -101,3 +101,40 @@ recompute their hashes. A subsequent genuine documentation-only main push must
 retain routine tests while skipping publication. Do not create unrelated
 commits or synthetic live releases merely to manufacture this evidence; record
 pending live observations distinctly from passing deterministic checks.
+
+## Verified download example
+
+The first successful automatic publication is
+[v0.1.0-preview.74](https://github.com/iricigor/win95-copilot/releases/tag/v0.1.0-preview.74),
+from source `520efa5cd2ed491455cc0e9a3cd64126de76b0da`.
+[Its genuine main-push workflow](https://github.com/iricigor/win95-copilot/actions/runs/42521204322)
+passed all 279 Windows tests, packaged both variants and verified all four
+uploaded assets before publishing the draft as a prerelease. The stable latest
+release remained `v0.1.0`.
+
+Independently downloaded archives matched these SHA-256 values, their manifest
+hashes and GitHub asset digests:
+
+| Archive | SHA-256 |
+|---|---|
+| `WinChatCopilot-0.1.0-preview.74-win-x64-framework-dependent.zip` | `d05f81d6c1440a48a69624902aaaa38ef7a6e99e4371ef821b540c6995eb4913` |
+| `WinChatCopilot-0.1.0-preview.74-win-x64-self-contained.zip` | `1a241fef187133018ffe8159a84657c07df3f3f63691f984890d9de050aa090e` |
+
+For example, after downloading all four assets to a new absolute directory,
+run from this repository:
+
+```powershell
+$downloads = 'C:\downloads\winchat-preview-74'
+Get-FileHash "$downloads\WinChatCopilot-0.1.0-preview.74-win-x64-framework-dependent.zip" -Algorithm SHA256
+.\scripts\Test-Package.ps1 -ManifestPath "$downloads\WinChatCopilot-0.1.0-preview.74-win-x64-framework-dependent.sha256.json"
+.\scripts\Test-Package.ps1 -ManifestPath "$downloads\WinChatCopilot-0.1.0-preview.74-win-x64-self-contained.sha256.json"
+```
+
+The actual downloaded packages verified all 6 framework-dependent and 401
+self-contained members, including runtime/version/source provenance. Both
+extracted applications also passed owned UI Automation launch/menu/dialog/window
+and synthetic subprocess checks on Windows 11 x64; the framework-dependent
+application passed authenticated, harmless real-Copilot readiness/SEND/context
+checks with isolated application data. Foreground keyboard access was unavailable
+on the final attempts and is not claimed passing. These are revision-specific
+observations, not universal platform/DPI or pixel-identical visual guarantees.
