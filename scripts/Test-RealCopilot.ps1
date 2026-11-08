@@ -32,10 +32,6 @@ $account = gh api user --jq .login
 if ($LASTEXITCODE -ne 0 -or $account -ne $ExpectedAccount) {
     throw 'Existing GitHub CLI authentication does not match -ExpectedAccount.'
 }
-$token = gh auth token
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($token)) {
-    throw 'Existing authentication is unavailable. Authenticate separately; this script never logs in.'
-}
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ('winchat-real-cli-' + [guid]::NewGuid())
 $cliHome = Join-Path $root 'home'
@@ -61,12 +57,12 @@ function Invoke-RealTurn {
     $info.StandardErrorEncoding = [Text.Encoding]::UTF8
     foreach ($key in @($info.Environment.Keys)) {
         if ($key -like 'COPILOT_*' -or $key -like 'OTEL_*' -or
-            $key -in @('GH_TOKEN', 'GITHUB_TOKEN', 'GH_HOST')) {
+            $key -eq 'COPILOT_HOME') {
+            if ($key -eq 'COPILOT_GITHUB_TOKEN') { continue }
             $info.Environment.Remove($key) | Out-Null
         }
     }
     $info.Environment['COPILOT_HOME'] = $cliHome
-    $info.Environment['COPILOT_GITHUB_TOKEN'] = $token
     $info.Environment['COPILOT_OTEL_ENABLED'] = 'false'
     foreach ($arg in @('--no-auto-update', '--no-custom-instructions', '--no-ask-user',
         '--no-remote', '--no-remote-export', '--no-color', '--disable-builtin-mcps',
@@ -221,7 +217,6 @@ function Invoke-RealTurn {
             if (-not $process.WaitForExit(10000)) { throw 'Owned CLI cleanup failed.' }
             $script:cleanupSafe = $true
         }
-        $info.Environment.Remove('COPILOT_GITHUB_TOKEN') | Out-Null
         $process.Dispose()
     }
 }
@@ -265,7 +260,6 @@ try {
             ElapsedMs, Cancelled, ExitCode, VerifiedZeroToolModelCalls, StderrLength, Stopped, ArgumentsRejected)
     } | ConvertTo-Json -Depth 5
 } finally {
-    $token = $null
     # Only this invocation's exact randomly named directory is removed.
     if ($cleanupSafe) {
         Remove-Item -LiteralPath $root -Recurse -Force

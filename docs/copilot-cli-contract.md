@@ -55,16 +55,18 @@ Without `-RunRealTests`, the script throws before discovering the CLI or calling
 the service. It checks the existing GitHub API identity against
 `-ExpectedAccount` and the bundled CLI version; it never logs in, installs,
 updates, changes settings, or falls back to a different explicit executable.
-It uses the existing `gh` credential only in child-process memory, never in
-arguments, output, or saved application settings.
+It never reads a credential. Child processes use existing OS-stored Copilot
+authentication or supported inherited authentication environment variables, just
+like the application. The `gh` identity check is an independent operator check,
+not proof of the inference account or authenticated Copilot readiness.
 
 The procedure runs six bounded harmless inference requests and one deliberate
 argument-validation failure. It creates only synthetic UUIDs/tokens, a temporary
 working directory, and an isolated `COPILOT_HOME`. It does not load repository
 instructions, existing conversations, plugins, MCP configuration, or provider
 configuration from the user's CLI home. No private repository data is included
-in prompts. The explicit GitHub credential is not, by itself, proof of the
-inference service's selected account; see authentication limitations below.
+in prompts. A successful zero-tool service response, not `gh` login alone,
+establishes readiness; see authentication limitations below.
 
 Only this invocation's randomly named temporary directory is removed, after
 owned CLI processes have exited. Output contains summarized synthetic session

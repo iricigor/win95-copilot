@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <None Include="..\..\scripts\*.ps1" Link="Scripts\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

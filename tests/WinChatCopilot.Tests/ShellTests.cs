@@ -9,6 +9,23 @@ namespace WinChatCopilot.Tests;
 [Collection("WPF")]
 public class ShellTests
 {
+    [Theory]
+    [InlineData(100, 200, 10, 10, true)]
+    [InlineData(100, 600, 10, 10, true)]
+    [InlineData(100, 601, 10, 10, false)]
+    [InlineData(100, 99, 10, 10, false)]
+    [InlineData(2147483646, -2147483646, 10, 10, true)]
+    [InlineData(100, 200, 12, 10, true)]
+    [InlineData(100, 200, 13, 10, false)]
+    [InlineData(100, 200, 10, 13, false)]
+    [InlineData(100, 200, -1, 10, false)]
+    [InlineData(100, 200, 20, 10, false)]
+    [InlineData(100, 200, 10, 20, false)]
+    public void CapturedSystemBoxSecondPressUsesNativeTimeAreaAndButtonBounds(
+        int firstTime, int nextTime, double x, double y, bool expected) =>
+        Assert.Equal(expected, RetroWindow.IsSecondSystemBoxPress(firstTime, nextTime,
+            new Point(10, 10), new Point(x, y), new Size(20, 20), 500, new Size(4, 4)));
+
     [Fact]
     public void ShellLoadsSquareChromeAndRealTextAreas() => OnSta(() =>
     {
