@@ -37,7 +37,8 @@ public static class OwnedDesktop {
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
-    [DllImport("user32.dll")] static extern bool ScreenToClient(IntPtr h, ref POINT point);
+    [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT point);
+    [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int ht, uint flags);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
@@ -103,10 +104,13 @@ public static class OwnedDesktop {
     public static void SystemBoxDoubleClick(IntPtr h, int pid, int screenX, int screenY) {
         Check(h,pid);
         POINT point=new POINT { X=screenX,Y=screenY };
-        if(!ScreenToClient(h,ref point)) throw new Win32Exception();
-        IntPtr position=new IntPtr((point.Y<<16)|(point.X&0xFFFF));
-        foreach(uint message in new uint[]{0x0201,0x0202,0x0203,0x0202})
-            if(!PostMessage(h,message,new IntPtr(message==0x0202?0:1),position)) throw new Win32Exception();
+        Check(WindowFromPoint(point),pid);
+        if(!SetCursorPos(screenX,screenY)) throw new Win32Exception();
+        System.Threading.Thread.Sleep(50);
+        Check(h,pid); Check(WindowFromPoint(point),pid);
+        INPUT[] clicks=new INPUT[4];
+        for(int i=0;i<clicks.Length;i++) { clicks[i].type=0; clicks[i].u.m.flags=i%2==0?2u:4u; }
+        if(SendInput(4,clicks,Marshal.SizeOf(typeof(INPUT)))!=4) throw new Win32Exception();
     }
     public static void SetEdit(IntPtr h, int pid, string value) {
         Check(h,pid);
