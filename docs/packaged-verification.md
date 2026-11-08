@@ -14,10 +14,28 @@ built synthetic executable (all its runtime files must remain beside it):
 ```powershell
 powershell.exe -NoProfile -STA -File .\scripts\Test-PackagedApp.ps1 `
   -RunDesktopTests `
-  -ExecutablePath 'C:\builds\winchat-0.1.0\WinChatCopilot-0.1.0-win-x64\WinChatCopilot.exe' `
+  -ExecutablePath 'C:\builds\winchat-0.1.0\WinChatCopilot-0.1.0-win-x64-framework-dependent\WinChatCopilot.exe' `
   -FakeCliPath 'C:\repo\tests\WinChatCopilot.FakeCli\bin\Release\net10.0\WinChatCopilot.FakeCli.exe' `
   -EvidenceDirectory 'C:\checks\winchat-new-run'
 ```
+
+For prereleases, build the same clean committed revision twice with
+`-ReleaseVersion '<base>-preview.<run_number>' -SourceRevision '<full HEAD SHA>'`,
+using separate new absolute output directories and `-SelfContained` on the
+second invocation. Four uniquely named assets result: one ZIP and one
+`.sha256.json` per variant. `Publish-App.ps1` validates each before success;
+rerun `Test-Package.ps1 -ManifestPath '<absolute manifest>'` after downloading.
+This verifies hashes/byte sizes for every archive member, recursive file
+completeness, version/SHA provenance, required executable/configuration/guide
+and the actual .NET 10 Desktop runtime configuration/payload. It is integrity
+evidence, not an application launch result. Extract both archives, independently
+recompute file sizes/hashes and run the owned-window harness on each extracted
+executable with separate isolated evidence/settings directories. Use a verified
+.NET 10 Desktop Runtime for the framework-dependent app. Record exact source
+SHA, asset names/hashes and actual deployment/launch outcomes; synthetic
+`PackagingTests` fixtures cover script failure/tampering contracts but do not
+claim real packaging or startup. No live release or real Copilot is required
+for the packaging task.
 
 Use Windows PowerShell 5.1 with STA for Windows UI Automation. A non-input
 desktop creation probe is recorded, then the explicitly authorized interactive

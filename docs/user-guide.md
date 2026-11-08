@@ -7,11 +7,13 @@ credentials, or restore conversations after restart.
 
 ## Install and run
 
-Extract the complete `WinChatCopilot-<version>-win-x64.zip` into a writable
+Extract the complete `WinChatCopilot-<release>-win-x64-framework-dependent.zip`
+or `WinChatCopilot-<release>-win-x64-self-contained.zip` into a writable
 location of your choice and run `WinChatCopilot.exe`. Keep all extracted files
 together. No installer, administrator access, registry registration, store
 publication, or signing is provided. Windows may warn about an unsigned download;
-verify the distribution's SHA-256 against its accompanying manifest.
+verify the distribution's SHA-256 against its accompanying distinctly named
+`WinChatCopilot-<release>-win-x64-<variant>.sha256.json` manifest.
 
 The default framework-dependent distribution requires the **.NET 10 Desktop
 Runtime (x64)**. The ordinary .NET runtime alone does not include WPF. A
@@ -169,6 +171,34 @@ Use a supported .NET 10 SDK and PowerShell 7 on Windows. From the repository:
 Select a new absolute output directory; the script refuses to overwrite one.
 It publishes Release/win-x64 without trimming or single-file extraction, copies
 this guide, produces a zip, and records versions and file/archive SHA-256 hashes
-in `manifest.json`. It does not install Copilot or alter system settings.
+in the matching `<package-name>.sha256.json`. File entries include nested files,
+relative names and byte sizes; verification rejects missing or unlisted files.
+It does not install Copilot or alter system settings.
 Use `-DotnetPath` for an explicitly selected SDK. The application version comes
 from `Directory.Build.props`, not this guide's release-family heading.
+
+Local packages default `ReleaseVersion` to that base version and record the
+checkout's full Git HEAD in `SourceRevision`. For prerelease packaging, supply
+both `-ReleaseVersion '0.1.0-preview.123'` and `-SourceRevision '<full commit SHA>'`.
+The positive number is the release workflow's `github.run_number`, not
+`run_attempt`; reruns retain the same version/tag (`v0.1.0-preview.123`).
+The SHA must match HEAD and the checkout must be clean. Missing/invalid
+prerelease provenance fails before publishing. The executable and About dialog
+still display `0.1.0`; the manifest distinguishes `ApplicationVersion` and
+`ReleaseVersion` and records SDK, runtime variant and UTC publication time.
+Both variants can be packaged into separate new output directories without
+asset-name collisions. This script creates local artifacts only, not a GitHub
+tag or release; automatic publication is a separate pipeline.
+
+With PowerShell 7, verify a downloaded archive beside its matching manifest:
+
+```powershell
+.\scripts\Test-Package.ps1 -ManifestPath 'C:\downloads\WinChatCopilot-0.1.0-preview.123-win-x64-framework-dependent.sha256.json'
+```
+
+Verification recomputes the archive and every ZIP member's SHA-256/byte size,
+checks required application/guide/configuration files and verifies .NET 10
+Desktop runtime deployment metadata. A self-contained payload must include its
+runtime; a framework-dependent one must not pretend to bundle it.
+Checksums detect damage/tampering relative to the manifest, not publisher
+authenticity; obtain both downloads from the same trusted source.
