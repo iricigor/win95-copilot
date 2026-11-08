@@ -40,6 +40,7 @@
                 <MenuItem x:Name="TimestampMenu" Header="Show _Timestamp" IsCheckable="True" Command="{x:Static local:ShellCommands.ShowTimestamp}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
                 <Separator />
+                <MenuItem x:Name="FontMenu" Header="_Font" />
                 <MenuItem Header="_User Name..." Command="{x:Static local:ShellCommands.UserName}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
                 <MenuItem Header="_Backend Settings..." Command="{x:Static local:ShellCommands.ConfigureBackend}"
@@ -83,8 +84,11 @@
         </Grid>
         <Border Grid.Row="4" BorderBrush="#808080" BorderThickness="1,1,0,0" Margin="3,0,3,3">
             <Border BorderBrush="White" BorderThickness="0,0,1,1">
-                <TextBlock x:Name="BackendStatus" Margin="4,3"
-                           Text="Backend unavailable - not connected." />
+                <StackPanel>
+                    <TextBlock x:Name="BackendStatus" Margin="4,3"
+                               Text="Backend unavailable - not connected." />
+                    <TextBlock x:Name="FontStatus" Margin="4,0,4,3" TextWrapping="Wrap" Visibility="Collapsed" />
+                </StackPanel>
             </Border>
         </Border>
     </Grid>

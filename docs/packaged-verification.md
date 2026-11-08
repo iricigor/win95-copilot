@@ -63,6 +63,7 @@ The output does not store real prompts, credentials, or user conversations.
 | UTF-8 transcript/export | Actual native save/path/cancel; exact deterministic empty/multiline/Unicode/timestamps/state/snapshot/overwrite/cancel/write-failure tests |
 | Preferences/restart | Published restart with persisted values, Auto-connect and empty new conversation; corrupt/locked/unreadable settings regressions |
 | Configurable user name | Published retro dialog/default Enter/Cancel/Escape, Unicode trimming/inline rejection, streaming retroactive rename with selection/focus/scroll/request-count preservation, native configured-name export and restart/backend-save preservation; deterministic old/invalid/locked settings, long names and immutable export snapshot |
+| Curated text fonts | Published Options submenu selects all three installed choices, checks actual UIA font attributes on both panes, preserves delayed-stream text/selection/input focus/scroll/request count, and retains the preference across restart/backend saves; deterministic missing-font guidance, checked states, old/invalid/locked settings and selected-font bold/multiline/Unicode width/wrap/scroll tests |
 | Shutdown/ownership | Published File/Alt+F4/system Close/system-box double-click and active generation with actual synthetic child; deterministic unrelated sentinel tests |
 
 Caption dragging, detailed popup pixel/typography comparison, genuine
@@ -95,6 +96,6 @@ substitute for either. Missing access after a bounded attempt is a non-blocking
 evidence gap, not a passed test or a reason to obtain credentials.
 
 Save/read back final task/PR/full-revision evidence and exact limitations on
-Epic #1 before delivery. Report applicable final CI/reviews independently.
+the task's parent Epic before delivery. Report applicable final CI/reviews independently.
 Human sign-off is optional, not required. Actual failures, unsafe behavior,
 missing implementation inputs, permissions and required gates remain blockers.

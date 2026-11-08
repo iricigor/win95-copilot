@@ -84,6 +84,21 @@ keeps your reading position during streaming; return to the bottom to follow.
 Options persist send mode, wrap, timestamps, Auto-connect and executable path.
 Auto-connect is off by default and can be enabled after configuration.
 
+**Options > Font** offers exactly Courier New (the default), Lucida Console,
+and Microsoft Sans Serif. Installed choices preview their own typeface; only
+the transcript and message input change, not application chrome or font size.
+A successful save applies immediately to existing and streamed text, preserving
+selection, focus and follow/reading position. Wrapping and horizontal scrolling
+use the selected font, including bold headings. The preference survives restart
+and unrelated settings changes; older settings retain Courier New.
+
+Missing fonts are disabled with explanatory text. If a saved font is unavailable,
+a visible status warning identifies the temporary Courier New rendering fallback
+(or Windows substitute if Courier New is also missing); no choice is checked as
+active and the saved preference is not rewritten. Select an installed choice to
+save a replacement. Unsupported saved values and failed writes show actionable
+settings errors; failed saves leave the previous active selection unchanged.
+
 **Options > User Name...** sets the user heading (default `User`) in a retro
 dialog. OK trims outer whitespace and accepts Unicode and interior spaces;
 blank names, line breaks (including Unicode line/paragraph separators), tabs

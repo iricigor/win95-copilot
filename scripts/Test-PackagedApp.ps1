@@ -233,6 +233,27 @@ function Menu([string] $Top, [string] $Action) {
     Start-Sleep -Milliseconds 100
 }
 function Status { return (By-Id 'BackendStatus').Current.Name }
+function Select-Font([string] $Name) {
+    $options=By-Name 'Options'
+    Assert-Owned $options
+    $options.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    Wait-For { $null -ne (By-Id 'FontMenu') } 'Font submenu'
+    $submenu=By-Id 'FontMenu'
+    Assert-Owned $submenu
+    $submenu.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    Wait-For { $null -ne (By-Name $Name) } "font choice $Name"
+    Invoke-Element (By-Name $Name)
+    Wait-For {
+        (Get-Content -LiteralPath (Join-Path $script:data 'settings.json') -Raw | ConvertFrom-Json).TextFont -eq $Name
+    } "persisted font $Name"
+    Start-Sleep -Milliseconds 100
+    foreach ($id in @('Transcript','PromptInput')) {
+        $pane=By-Id $id
+        Assert-Owned $pane
+        $text=$pane.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern)
+        Assert-True ($text.DocumentRange.GetAttributeValue([Windows.Automation.TextPattern]::FontNameAttribute) -eq $Name) "$id did not render with $Name."
+    }
+}
 function Transcript {
     $element = By-Id 'Transcript'
     Assert-Owned $element
@@ -539,6 +560,17 @@ try {
     Rename-User 'User'
     Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Second rename moved message selection.'
     Record 'actual retroactive rename during long stream preserves selection/input focus/scroll-away and request count'
+    $textBeforeFont=Transcript
+    foreach ($font in @('Courier New','Lucida Console','Microsoft Sans Serif')) {
+        Select-Font $font
+        Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') "Font $font moved message selection."
+        Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) "Font $font forced scroll-away to bottom."
+        Wait-For { (By-Id 'PromptInput').Current.HasKeyboardFocus } "font $font restored input focus" 2
+        Assert-True ((Transcript) -ceq $textBeforeFont) "Font $font changed transcript text."
+        Assert-True ((Requests).Count -eq $requestsBeforeRename) "Font $font submitted another backend request."
+    }
+    [OwnedDesktop]::Capture($script:process.MainWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'font-selected.png')) | Out-Null
+    Record 'actual installed font submenu choices/persistence and delayed-stream text/selection/focus/scroll/request preservation'
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
     Wait-For { (Status) -like 'Copilot ready*' } 'scroll fixture completion'
     Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Actual streaming forced a scrolled-away reader to bottom.'
@@ -626,6 +658,7 @@ try {
     $export=Join-Path $EvidenceDirectory 'export.txt'
     Set-Value $fileInput $export
     Invoke-Element (By-Name 'Save' $save)
+    Wait-For { $null -eq (Owned-Window 'Save Transcript') } 'native save dialog dismissal'
     Wait-For { Test-Path -LiteralPath $export } 'native selected export'
     $bytes=[IO.File]::ReadAllBytes($export)
     Assert-True (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)) 'Export contains UTF-8 BOM.'
@@ -643,7 +676,7 @@ try {
     Start-App 'main' -Reuse
     Wait-For { (Status) -like 'Copilot ready*' } 'restart Auto-connect'
     $saved=Get-Content -LiteralPath (Join-Path $script:data 'settings.json') -Raw | ConvertFrom-Json
-    Assert-True ($saved.AutoConnect -and $saved.WordWrap -and $saved.ShowTimestamp -and $saved.SendMode -eq 'Enter' -and $saved.ExecutablePath -eq $fake -and $saved.UserName -eq $syntheticName) 'Preferences did not survive restart.'
+    Assert-True ($saved.AutoConnect -and $saved.WordWrap -and $saved.ShowTimestamp -and $saved.SendMode -eq 'Enter' -and $saved.ExecutablePath -eq $fake -and $saved.UserName -eq $syntheticName -and $saved.TextFont -eq 'Microsoft Sans Serif') 'Preferences did not survive restart.'
     Assert-True ([string]::IsNullOrWhiteSpace((Transcript))) 'Restart restored old conversation.'
     Menu 'Options' 'User Name...'
     Wait-For { $null -ne (Owned-Window 'User Name') } 'restored-name dialog'
@@ -653,6 +686,8 @@ try {
     Wait-For { $null -ne (Owned-Window 'Backend Settings') } 'name-preserving backend settings'
     Invoke-Element (By-Name 'OK' (Owned-Window 'Backend Settings'))
     Wait-For { $null -eq (Owned-Window 'Backend Settings') -and (Status) -like 'Copilot ready*' } 'name-preserving backend save'
+    $restoredFont=Get-Content -LiteralPath (Join-Path $script:data 'settings.json') -Raw | ConvertFrom-Json
+    Assert-True ($restoredFont.TextFont -eq 'Microsoft Sans Serif') 'Backend save lost the font preference.'
     Scenario 'complete'
     Submit 'synthetic restart name'
     Wait-For { (Status) -like 'Copilot ready*' } 'restored-name turn'
