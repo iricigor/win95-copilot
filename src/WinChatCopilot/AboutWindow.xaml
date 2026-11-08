@@ -1,0 +1,18 @@
+<local:RetroWindow x:Class="WinChatCopilot.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WinChatCopilot"
+        Title="About WinChat-Copilot" Width="380" Height="210" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Style="{DynamicResource RetroWindowStyle}">
+    <local:RetroWindow.Resources>
+        <ResourceDictionary Source="RetroTheme.xaml" />
+    </local:RetroWindow.Resources>
+    <StackPanel Margin="20,16">
+        <TextBlock Text="WinChat-Copilot" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
+        <TextBlock x:Name="VersionLabel" Margin="0,8,0,0" HorizontalAlignment="Center" />
+        <TextBlock Text="A Windows 3.1-style text chat companion." Margin="0,8,0,16" HorizontalAlignment="Center" />
+        <Button Content="_OK" Width="86" HorizontalAlignment="Center" IsDefault="True" IsCancel="True"
+                Command="{x:Static SystemCommands.CloseWindowCommand}" />
+    </StackPanel>
+</local:RetroWindow>

@@ -30,7 +30,7 @@ public class ScaffoldTests
                 Assert.True(window.Width >= window.MinWidth);
                 Assert.True(window.Height >= window.MinHeight);
                 Assert.NotNull(window.Content);
-                Assert.Equal(WindowStyle.SingleBorderWindow, window.WindowStyle);
+                Assert.Equal(WindowStyle.None, window.WindowStyle);
                 window.Close();
             }
             catch (Exception exception)
