@@ -1,5 +1,7 @@
 # win95-copilot
 
+![WinChat-Copilot 0.1.0 Windows 3.1-style application window](docs/images/winchat-copilot.png)
+
 ## Application scaffold
 
 The bootstrap uses **WPF on .NET 10 LTS**. WPF supplies a lightweight,
