@@ -18,6 +18,8 @@ File > Save Transcript exports the current conversation as UTF-8 plain text.
 Options > User Name sets a persisted presentation-only user heading.
 Options > Font selects Courier New, Lucida Console or Microsoft Sans Serif for
 both text panes, with persisted selection and explicit missing-font guidance.
+Speaker names use fixed navy user/teal assistant colors, with live system
+window/text colors in Windows high-contrast mode; copied/exported text is unchanged.
 
 ### Prerequisites
 

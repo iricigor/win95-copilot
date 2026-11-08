@@ -84,6 +84,14 @@ keeps your reading position during streaming; return to the bottom to follow.
 Options persist send mode, wrap, timestamps, Auto-connect and executable path.
 Auto-connect is off by default and can be enabled after configuration.
 
+Speaker names are bold navy for the user (`#000080`) and bold teal for
+Assistant (`#008080`), even when the configured user name is `Assistant`.
+Only names are colored; timestamps, colons, waiting dots, state markers and
+message bodies stay black on white. Both name colors exceed 4.5:1 contrast.
+Windows high-contrast mode instead uses system window/text colors and updates
+existing names without changing selection or text. Copy and plain-text exports
+contain no color markup. Colors are fixed, not another saved preference.
+
 **Options > Font** offers exactly Courier New (the default), Lucida Console,
 and Microsoft Sans Serif. Installed choices preview their own typeface; only
 the transcript and message input change, not application chrome or font size.

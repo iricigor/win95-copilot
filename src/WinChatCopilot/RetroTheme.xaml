@@ -7,6 +7,8 @@
     </ResourceDictionary.MergedDictionaries>
     <SolidColorBrush x:Key="PanelBrush" Color="#C0C0C0" />
     <SolidColorBrush x:Key="ActiveTitleBrush" Color="#000080" />
+    <SolidColorBrush x:Key="UserNameBrush" Color="#000080" />
+    <SolidColorBrush x:Key="AssistantNameBrush" Color="#008080" />
 
     <DataTemplate x:Key="RetroActionContent">
         <StackPanel Orientation="Horizontal">

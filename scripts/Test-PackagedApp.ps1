@@ -25,7 +25,7 @@ if ($RunRealTests -and ([string]::IsNullOrWhiteSpace($CopilotPath) -or -not [IO.
     throw 'Real packaged tests additionally require an absolute verified CopilotPath.'
 }
 [IO.Directory]::CreateDirectory($EvidenceDirectory) | Out-Null
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, System.Drawing
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, PresentationFramework, System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
 using System.ComponentModel;
@@ -258,6 +258,27 @@ function Transcript {
     $element = By-Id 'Transcript'
     Assert-Owned $element
     return $element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(-1)
+}
+function Assert-RoleColors([string] $UserName = 'User') {
+    $element = By-Id 'Transcript'
+    Assert-Owned $element
+    $document = $element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange
+    $remaining = $document.Clone()
+    $system = [System.Drawing.SystemColors]::WindowText
+    $plain = if ([System.Windows.SystemParameters]::HighContrast) { $system.R + 256 * $system.G + 65536 * $system.B } else { 0 }
+    $colors = if ([System.Windows.SystemParameters]::HighContrast) { @($plain, $plain) } else { @(0x800000, 0x808000) }
+    $names = @($UserName, 'Assistant')
+    foreach ($index in 0..1) {
+        $heading = $remaining.FindText($names[$index] + ':', $false, $false)
+        Assert-True ($null -ne $heading) "Role heading $index was not available."
+        $name = $heading.Clone()
+        [void]$name.MoveEndpointByUnit([Windows.Automation.TextPatternRangeEndpoint]::End, [Windows.Automation.TextUnit]::Character, -1)
+        Assert-True ($name.GetAttributeValue([Windows.Automation.TextPattern]::ForegroundColorAttribute) -eq $colors[$index]) "Role $index did not use its exact name color."
+        $colon = $heading.Clone()
+        [void]$colon.MoveEndpointByUnit([Windows.Automation.TextPatternRangeEndpoint]::Start, [Windows.Automation.TextUnit]::Character, $names[$index].Length)
+        Assert-True ($colon.GetAttributeValue([Windows.Automation.TextPattern]::ForegroundColorAttribute) -eq $plain) "Role $index colored its colon."
+        $remaining.MoveEndpointByRange([Windows.Automation.TextPatternRangeEndpoint]::Start, $heading, [Windows.Automation.TextPatternRangeEndpoint]::End)
+    }
 }
 function Record([string] $Name) { $results.Add([pscustomobject]@{ Check = $Name; Outcome = 'Passed'; Utc = [DateTime]::UtcNow.ToString('o') }) }
 function Assert-ActionButtons($Window, [string[]] $Names) {
@@ -559,6 +580,12 @@ try {
     Assert-True ((Requests).Count -eq $requestsBeforeRename) 'Rename submitted another backend request.'
     Rename-User 'User'
     Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Second rename moved message selection.'
+    Rename-User 'Assistant'
+    Assert-RoleColors 'Assistant'
+    Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Same-name role coloring moved selection.'
+    Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Same-name role coloring moved reading position.'
+    Rename-User 'User'
+    Assert-RoleColors
     Record 'actual retroactive rename during long stream preserves selection/input focus/scroll-away and request count'
     $textBeforeFont=Transcript
     foreach ($font in @('Courier New','Lucida Console','Microsoft Sans Serif')) {
@@ -568,9 +595,11 @@ try {
         Wait-For { (By-Id 'PromptInput').Current.HasKeyboardFocus } "font $font restored input focus" 2
         Assert-True ((Transcript) -ceq $textBeforeFont) "Font $font changed transcript text."
         Assert-True ((Requests).Count -eq $requestsBeforeRename) "Font $font submitted another backend request."
+        Assert-RoleColors
     }
     [OwnedDesktop]::Capture($script:process.MainWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'font-selected.png')) | Out-Null
     Record 'actual installed font submenu choices/persistence and delayed-stream text/selection/focus/scroll/request preservation'
+    Record 'actual native role foreground colors/black colons, equal Assistant user name, all fonts and selected streamed text'
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
     Wait-For { (Status) -like 'Copilot ready*' } 'scroll fixture completion'
     Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Actual streaming forced a scrolled-away reader to bottom.'
