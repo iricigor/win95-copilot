@@ -29,12 +29,13 @@ internal static class TranscriptDisplay
         return marker.Length == 0 ? text : text.Length == 0 ? marker : text + "\r\n" + marker;
     }
 
-    internal static string Format(IEnumerable<ChatTurn> turns, bool timestamps, bool markGenerating = false)
+    internal static string Format(IEnumerable<ChatTurn> turns, bool timestamps, bool markGenerating = false,
+        string userName = "User")
     {
         var text = new StringBuilder();
         foreach (var turn in turns)
         {
-            text.Append(Heading("User", turn.SubmittedAt, timestamps)).Append(Message(turn.Prompt)).Append("\r\n")
+            text.Append(Heading(userName, turn.SubmittedAt, timestamps)).Append(Message(turn.Prompt)).Append("\r\n")
                 .Append(Heading("Assistant", turn.SubmittedAt, timestamps)).Append(Response(turn, markGenerating)).Append("\r\n");
         }
         return text.ToString();

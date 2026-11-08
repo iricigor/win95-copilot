@@ -50,6 +50,10 @@ command. Backend Settings and Connect now share commands between the utility
 area and Options. The owned settings dialog uses the same retro resources,
 supports Browse/OK/Cancel, preserves preferences and shows validation errors.
 Auto-connect is persisted and checked truthfully; connection checks are asynchronous.
+Options > User Name... opens an owned retro modal with a labeled name field,
+OK/Cancel, default Enter/Escape behavior and inline validation/save errors.
+Names are persisted presentation only; all user headings update incrementally
+without changing the Assistant role, canonical messages or backend identity.
 
 Save Transcript (#13) and Clear Window (#12) are implemented through
 shared commands. There are no clickable no-op stubs or fake connected/ready

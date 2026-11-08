@@ -15,6 +15,7 @@ are implemented. SEND now streams a text-only chat turn into the transcript.
 Keyboard send modes, Edit actions and transcript preferences are implemented.
 Clear Window safely settles active work and prepares a new conversation.
 File > Save Transcript exports the current conversation as UTF-8 plain text.
+Options > User Name sets a persisted presentation-only user heading.
 
 ### Prerequisites
 
@@ -78,6 +79,15 @@ use these persisted preferences. Backend Settings preserves these fields. Corrup
 unreadable and unwritable files produce actionable errors; writes replace the
 previous file only after the new document has been written successfully.
 No credentials are collected or saved.
+
+Options > User Name... defaults to `User`, trims outer whitespace on OK, and
+rejects blank names, line breaks, tabs and control characters with inline
+guidance. Unicode/interior spaces and long names are supported without a short
+length cap. Cancel/Escape or a failed save preserves the previous value.
+Successful saves rename all current/subsequent user headings and future export
+snapshots without changing prompts, backend identity, message selection or
+reading position. Assistant remains fixed. Older settings files keep `User`;
+invalid/null saved names are explicit errors, never silently replaced.
 
 With Auto-connect off, startup still discovers the backend and shows configuration
 guidance when it is missing/invalid, but performs no service request. Connect

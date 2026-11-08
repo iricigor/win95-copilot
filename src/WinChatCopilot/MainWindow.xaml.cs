@@ -67,6 +67,9 @@ public partial class MainWindow : RetroWindow
         CommandBindings.Add(new CommandBinding(ShellCommands.ShowTimestamp,
             (_, _) => SaveDisplaySettings(backend.Settings with { ShowTimestamp = !backend.Settings.ShowTimestamp }),
             (_, e) => e.CanExecute = initialized && !closing));
+        CommandBindings.Add(new CommandBinding(ShellCommands.UserName,
+            (_, _) => new UserNameWindow(backend.Settings.UserName, SaveUserName) { Owner = this }.ShowDialog(),
+            (_, e) => e.CanExecute = initialized && !closing));
         CommandBindings.Add(new CommandBinding(ShellCommands.Send,
             async (_, _) => await SendAsync(), (_, e) => e.CanExecute = !closing && !resetting &&
                 pendingGeneration is null && backend.State == BackendState.Ready &&
@@ -175,6 +178,13 @@ public partial class MainWindow : RetroWindow
         UpdateBackend();
     }
 
+    internal void SaveUserName(string name)
+    {
+        backend.Save(backend.Settings with { UserName = UserDisplayName.Normalize(name) });
+        RefreshTranscript();
+        UpdateBackend();
+    }
+
     private void OnTranscriptScrollChanged(object sender, ScrollChangedEventArgs e)
     {
         if (updatingTranscript) return;
@@ -204,7 +214,7 @@ public partial class MainWindow : RetroWindow
     }
 
     private void RefreshTranscript() =>
-        ChangeTranscript(() => Transcript.Update(turns, backend.Settings.ShowTimestamp, WaitingDots));
+        ChangeTranscript(() => Transcript.Update(turns, backend.Settings.ShowTimestamp, WaitingDots, backend.Settings.UserName));
 
     private void StartWaitingIndicator()
     {
@@ -244,7 +254,8 @@ public partial class MainWindow : RetroWindow
     internal Task SaveTranscriptAsync()
     {
         if (!ShellCommands.SaveTranscript.CanExecute(null, this)) return Task.CompletedTask;
-        var snapshot = TranscriptDisplay.Format(turns, backend.Settings.ShowTimestamp, markGenerating: true);
+        var snapshot = TranscriptDisplay.Format(turns, backend.Settings.ShowTimestamp, markGenerating: true,
+            userName: backend.Settings.UserName);
         savingTranscript = true;
         UpdateBackend();
         return pendingExport = ExportAsync(snapshot);

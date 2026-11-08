@@ -40,6 +40,8 @@
                 <MenuItem x:Name="TimestampMenu" Header="Show _Timestamp" IsCheckable="True" Command="{x:Static local:ShellCommands.ShowTimestamp}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
                 <Separator />
+                <MenuItem Header="_User Name..." Command="{x:Static local:ShellCommands.UserName}"
+                          CommandTarget="{Binding ElementName=ShellWindow}" />
                 <MenuItem Header="_Backend Settings..." Command="{x:Static local:ShellCommands.ConfigureBackend}"
                           CommandTarget="{Binding ElementName=ShellWindow}" />
             </MenuItem>

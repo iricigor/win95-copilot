@@ -331,6 +331,22 @@ function Latest-AssistantText {
     return $response
 }
 
+function Rename-User([string] $Name, [string] $Dismiss = 'OK') {
+    Menu 'Options' 'User Name...'
+    Wait-For { $null -ne (Owned-Window 'User Name') } 'user-name dialog'
+    $dialog=Owned-Window 'User Name'
+    Set-Value (By-Id 'NameInput' $dialog) $Name
+    if ($Dismiss -eq 'Enter') {
+        (By-Id 'NameInput' $dialog).SetFocus()
+        Keys @(0x0D) $dialog
+    } elseif ($Dismiss -eq 'Escape') {
+        Keys @(0x1B) $dialog
+    } else {
+        Invoke-Element (By-Id $(if ($Dismiss -eq 'Cancel') { 'CancelButton' } else { 'OkButton' }) $dialog)
+    }
+    Wait-For { $null -eq (Owned-Window 'User Name') } "user-name $Dismiss dismissal"
+}
+
 try {
     Start-App 'main'
     Wait-For { (Status) -like 'Backend unavailable*' } 'Auto-connect off startup'
@@ -418,6 +434,31 @@ try {
     Menu 'Options' 'Word Wrap'
     Menu 'Options' 'Show Timestamp'
     Assert-True ((Transcript) -match '(?m)^\[\d{2}:\d{2}\] User: ' -and (Transcript) -match '(?m)^\[\d{2}:\d{2}\] Assistant: ') 'Timestamp toggle did not produce compact timestamps before both speaker names.'
+    Menu 'Options' 'User Name...'
+    Wait-For { $null -ne (Owned-Window 'User Name') } 'streaming name dialog'
+    $nameDialog=Owned-Window 'User Name'
+    Assert-True ((Get-Value (By-Id 'NameInput' $nameDialog)) -eq 'User') 'Default user name was not prepopulated.'
+    foreach($invalidName in @('   ',"synthetic`tname","synthetic`nname")) {
+        Set-Value (By-Id 'NameInput' $nameDialog) $invalidName
+        Invoke-Element (By-Id 'OkButton' $nameDialog)
+        Wait-For { -not [string]::IsNullOrWhiteSpace((By-Id 'ValidationMessage' $nameDialog).Current.Name) } 'inline invalid name feedback'
+        Assert-True ($null -ne (Owned-Window 'User Name')) 'Invalid user name closed successfully.'
+        $stored=Get-Content -LiteralPath (Join-Path $script:data 'settings.json') -Raw | ConvertFrom-Json
+        Assert-True ($stored.UserName -eq 'User') 'Invalid name replaced saved preferences.'
+    }
+    $syntheticName='Synthetic '+[char]0x6F22
+    Set-Value (By-Id 'NameInput' $nameDialog) ("  "+$syntheticName+"  ")
+    [void][OwnedDesktop]::Capture([IntPtr]$nameDialog.Current.NativeWindowHandle,$script:process.Id,(Join-Path $EvidenceDirectory 'user-name.png'))
+    (By-Id 'NameInput' $nameDialog).SetFocus()
+    Keys @(0x0D) $nameDialog
+    Wait-For { $null -eq (Owned-Window 'User Name') } 'name default Enter save'
+    Assert-True ((Transcript).Contains($syntheticName+': synthetic first') -and (Status) -like 'Copilot generating*') 'Streaming rename lost current headings or generation.'
+    Assert-True ((Requests).Count -eq 1 -and (Requests)[0][-1] -eq "synthetic first`nsecond") 'Name preference changed or duplicated the actual prompt.'
+    Rename-User 'discarded synthetic name' 'Cancel'
+    Rename-User 'discarded synthetic name' 'Escape'
+    Assert-True ((Transcript).Contains($syntheticName+': synthetic first')) 'Cancel/Escape changed the active name.'
+    Rename-User 'User'
+    Record 'actual user-name modal/default Enter/Unicode trimming/inline rejection/Cancel/Escape and presentation-only streaming rename'
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
     Wait-For { (Status) -like 'Copilot ready*' } 'stream completion'
     Assert-True ((Transcript).Contains([char]0x20AC) -and -not (Transcript).Contains([char]27) -and -not (Transcript).Contains('DIAGNOSTIC_NOT_RESPONSE')) 'Actual transcript leaked diagnostics or lost Unicode.'
@@ -437,6 +478,22 @@ try {
     $scroll=$transcript.GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern)
     $scroll.SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll,0)
     Start-Sleep -Milliseconds 100
+    $pattern=$transcript.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern)
+    $selected=$pattern.DocumentRange.FindText('synthetic first',$false,$false)
+    Assert-True ($null -ne $selected) 'Rename fixture selection text was unavailable.'
+    $selected.Select()
+    (By-Id 'PromptInput').SetFocus()
+    Wait-For { (By-Id 'PromptInput').Current.HasKeyboardFocus } 'rename initial input focus' 2
+    $requestsBeforeRename=(Requests).Count
+    Rename-User 'Synthetic Reader'
+    Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Rename moved message selection.'
+    Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Rename forced scroll-away to bottom.'
+    Wait-For { (By-Id 'PromptInput').Current.HasKeyboardFocus } 'rename restored input focus' 2
+    Assert-True (([regex]::Matches((Transcript),'(?m)^\[\d{2}:\d{2}\] Synthetic Reader: ')).Count -eq 3) 'Rename did not update all existing user roles.'
+    Assert-True ((Requests).Count -eq $requestsBeforeRename) 'Rename submitted another backend request.'
+    Rename-User 'User'
+    Assert-True ($pattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Second rename moved message selection.'
+    Record 'actual retroactive rename during long stream preserves selection/input focus/scroll-away and request count'
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.continue'),'continue')
     Wait-For { (Status) -like 'Copilot ready*' } 'scroll fixture completion'
     Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'Actual streaming forced a scrolled-away reader to bottom.'
@@ -514,6 +571,8 @@ try {
     $newSession=@((Requests)[-1] | Where-Object { $_ -like '--session-id=*' })[0]
     Assert-True ($oldSession -ne $newSession) 'Clear Window reused old synthetic backend session.'
     Record 'actual Clear Window during generation, empty transcript, fresh session'
+    Rename-User $syntheticName
+    Assert-True ((Transcript).Contains($syntheticName+': synthetic after reset')) 'Saved name did not update post-reset headings.'
     Menu 'File' 'Save Transcript...'
     Wait-For { $null -ne (Owned-Window 'Save Transcript') } 'native save dialog'
     $save=Owned-Window 'Save Transcript'
@@ -525,6 +584,7 @@ try {
     $bytes=[IO.File]::ReadAllBytes($export)
     Assert-True (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)) 'Export contains UTF-8 BOM.'
     Assert-True ([IO.File]::ReadAllText($export).Contains('synthetic after reset')) 'Native export omitted current conversation.'
+    Assert-True ([IO.File]::ReadAllText($export).Contains($syntheticName+': synthetic after reset')) 'Native export omitted the configured user heading.'
     # UIA omits the final paragraph terminator retained by plain-text export.
     Assert-True ([IO.File]::ReadAllText($export) -ceq ((Transcript) + "`r`n")) 'Native export headings/text differed from the completed displayed transcript.'
     Menu 'File' 'Save Transcript...'
@@ -537,8 +597,20 @@ try {
     Start-App 'main' -Reuse
     Wait-For { (Status) -like 'Copilot ready*' } 'restart Auto-connect'
     $saved=Get-Content -LiteralPath (Join-Path $script:data 'settings.json') -Raw | ConvertFrom-Json
-    Assert-True ($saved.AutoConnect -and $saved.WordWrap -and $saved.ShowTimestamp -and $saved.SendMode -eq 'Enter' -and $saved.ExecutablePath -eq $fake) 'Preferences did not survive restart.'
+    Assert-True ($saved.AutoConnect -and $saved.WordWrap -and $saved.ShowTimestamp -and $saved.SendMode -eq 'Enter' -and $saved.ExecutablePath -eq $fake -and $saved.UserName -eq $syntheticName) 'Preferences did not survive restart.'
     Assert-True ([string]::IsNullOrWhiteSpace((Transcript))) 'Restart restored old conversation.'
+    Menu 'Options' 'User Name...'
+    Wait-For { $null -ne (Owned-Window 'User Name') } 'restored-name dialog'
+    Assert-True ((Get-Value (By-Id 'NameInput' (Owned-Window 'User Name'))) -eq $syntheticName) 'Restart did not restore the active name.'
+    Keys @(0x1B) (Owned-Window 'User Name')
+    Menu 'Options' 'Backend Settings...'
+    Wait-For { $null -ne (Owned-Window 'Backend Settings') } 'name-preserving backend settings'
+    Invoke-Element (By-Name 'OK' (Owned-Window 'Backend Settings'))
+    Wait-For { $null -eq (Owned-Window 'Backend Settings') -and (Status) -like 'Copilot ready*' } 'name-preserving backend save'
+    Scenario 'complete'
+    Submit 'synthetic restart name'
+    Wait-For { (Status) -like 'Copilot ready*' } 'restored-name turn'
+    Assert-True ((Transcript).Contains($syntheticName+': synthetic restart name')) 'Restart/backend save lost the configured heading.'
     Record 'actual restart persisted all preferences, Auto-connect, no conversation restoration'
     Close-App 'AltF4'
     Start-App 'system'

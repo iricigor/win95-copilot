@@ -56,6 +56,7 @@ public sealed class SettingsStore(string filePath)
 
     private static void Validate(AppSettings settings)
     {
+        UserDisplayName.Normalize(settings.UserName);
         if (settings.SchemaVersion != 1 || !Enum.IsDefined(settings.SendMode) ||
             settings.ExecutablePath is not null && string.IsNullOrWhiteSpace(settings.ExecutablePath))
             throw new InvalidDataException("Unsupported settings version, send mode, or empty executable path. Use null for automatic discovery.");

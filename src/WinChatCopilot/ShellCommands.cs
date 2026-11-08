@@ -18,6 +18,7 @@ public static class ShellCommands
     public static RoutedUICommand WordWrap { get; } = Create("Word wrap");
     public static RoutedUICommand AutoConnect { get; } = Create("Auto-connect");
     public static RoutedUICommand ShowTimestamp { get; } = Create("Show timestamp");
+    public static RoutedUICommand UserName { get; } = Create("User name");
     public static RoutedUICommand ConfigureBackend { get; } = Create("Configure backend");
     public static RoutedUICommand Connect { get; } = Create("Connect");
     public static RoutedUICommand Send { get; } = Create("Send");

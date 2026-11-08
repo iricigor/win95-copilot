@@ -62,6 +62,7 @@ The output does not store real prompts, credentials, or user conversations.
 | Failures and no automatic duplicate prompts | Published synthetic partial failure/modal/input/marker, request-count assertion and explicit Connect; deterministic launch/auth/error cases |
 | UTF-8 transcript/export | Actual native save/path/cancel; exact deterministic empty/multiline/Unicode/timestamps/state/snapshot/overwrite/cancel/write-failure tests |
 | Preferences/restart | Published restart with persisted values, Auto-connect and empty new conversation; corrupt/locked/unreadable settings regressions |
+| Configurable user name | Published retro dialog/default Enter/Cancel/Escape, Unicode trimming/inline rejection, streaming retroactive rename with selection/focus/scroll/request-count preservation, native configured-name export and restart/backend-save preservation; deterministic old/invalid/locked settings, long names and immutable export snapshot |
 | Shutdown/ownership | Published File/Alt+F4/system Close/system-box double-click and active generation with actual synthetic child; deterministic unrelated sentinel tests |
 
 Caption dragging, detailed popup pixel/typography comparison, genuine
