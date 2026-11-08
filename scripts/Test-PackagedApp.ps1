@@ -480,7 +480,8 @@ try {
     $bytes=[IO.File]::ReadAllBytes($export)
     Assert-True (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)) 'Export contains UTF-8 BOM.'
     Assert-True ([IO.File]::ReadAllText($export).Contains('synthetic after reset')) 'Native export omitted current conversation.'
-    Assert-True ([IO.File]::ReadAllText($export) -eq (Transcript)) 'Native export headings/text differed from the completed displayed transcript.'
+    # UIA omits the final paragraph terminator retained by plain-text export.
+    Assert-True ([IO.File]::ReadAllText($export) -ceq ((Transcript) + "`r`n")) 'Native export headings/text differed from the completed displayed transcript.'
     Menu 'File' 'Save Transcript...'
     Wait-For { $null -ne (Owned-Window 'Save Transcript') } 'save cancellation dialog'
     Invoke-Element (By-Name 'Cancel' (Owned-Window 'Save Transcript'))
