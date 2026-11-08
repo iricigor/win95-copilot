@@ -16,6 +16,12 @@ claim exists anywhere in the repository, stop without taking another task.
 If there are no eligible native child tasks, report that and make no changes.
 Do not create the missing task breakdown or implement the Epic directly.
 
-Follow the agent definition and repository instructions. Missing instructions,
-permissions, uncertain ownership, or unavailable required evidence are blockers;
-do not silently substitute another agent or broader workflow.
+Follow the agent definition and repository instructions. Verification is
+automation-first: automate feasible checks; for unavailable real-service/isolated
+desktop access or checks that cannot reasonably be automated, make bounded
+best-effort checks and save/read back a non-blocking note on the Epic. Do not
+require human testing/sign-off or retain a claim solely for those limitations.
+Actual failures, unsafe behavior, missing implementation inputs/instructions,
+permissions, uncertain ownership and applicable required CI/reviews remain
+blockers. Never fabricate evidence, bypass gates or silently substitute another
+agent or broader workflow.
