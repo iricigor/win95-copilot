@@ -216,8 +216,9 @@ a 1 MiB safety bound; this limits memory, not request duration or provider laten
 The shared readiness/request builder retains all verified text-only restrictions.
 
 Before the first response text, the Assistant heading cycles through one to five
-dots at 500 ms intervals. First nonempty text stops the indicator immediately;
-streaming pauses do not restart it. Cancellation, failure, Clear Window and
+dots at 500 ms intervals, after the colon and a space (`Assistant: ...`).
+First nonempty text stops the indicator immediately; streaming pauses do not
+restart it. Cancellation, failure, Clear Window and
 shutdown stop and detach the owned dispatcher timer. Dots change only the active
 heading, preserving reading selection/focus/scroll behavior, and never enter
 canonical response text or exports.

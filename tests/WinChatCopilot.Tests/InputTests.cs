@@ -336,7 +336,7 @@ public class InputTests
             Assert.Equal(new Thickness(0), paragraph.Margin);
             Assert.Equal(new Thickness(0), paragraph.Padding);
             var runs = paragraph.Inlines.Cast<Run>().ToArray();
-            Assert.Equal(4, runs.Length);
+            Assert.Equal(5, runs.Length);
             Assert.Equal(FontWeights.Normal, runs[0].FontWeight);
             Assert.Equal(TranscriptDisplay.Timestamp(turn.SubmittedAt, timestamps), runs[0].Text);
             Assert.Equal(FontWeights.Bold, runs[1].FontWeight);
@@ -344,7 +344,9 @@ public class InputTests
             Assert.Equal(FontWeights.Bold, runs[2].FontWeight);
             Assert.Equal(":", runs[2].Text);
             Assert.Equal(FontWeights.Normal, runs[3].FontWeight);
-            Assert.StartsWith(" ", runs[3].Text);
+            Assert.Empty(runs[3].Text);
+            Assert.Equal(FontWeights.Normal, runs[4].FontWeight);
+            Assert.StartsWith(" ", runs[4].Text);
         }
         Assert.Equal("Hi\r\n", turns[0].Prompt);
         Assert.Equal(response, turns[0].Response);

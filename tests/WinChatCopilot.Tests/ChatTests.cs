@@ -734,7 +734,13 @@ public class ChatTests
             foreach (var dots in new[] { 1, 2, 3, 4, 5, 1, 2 })
             {
                 Assert.Equal(dots, window.WaitingDots);
-                Assert.Contains("Assistant" + new string('.', dots) + ": ", transcript.Text);
+                Assert.Contains("Assistant: " + new string('.', dots) + "\r\n", transcript.Text);
+                var runs = assistant.Inlines.Cast<Run>().ToArray();
+                Assert.Equal("Assistant", runs[1].Text);
+                Assert.Equal(":", runs[2].Text);
+                Assert.Equal(FontWeights.Normal, runs[3].FontWeight);
+                Assert.Equal(" " + new string('.', dots), runs[3].Text);
+                Assert.Empty(runs[4].Text);
                 Assert.Equal(selected, transcript.Selection.Text);
                 Assert.True(input.IsKeyboardFocusWithin);
                 Assert.InRange(Math.Abs(transcript.VerticalOffset - offset), 0, 1);
@@ -748,7 +754,7 @@ public class ChatTests
             }
             ShellCommands.ShowTimestamp.Execute(null, window);
             Assert.Contains(TranscriptDisplay.Timestamp(turn.SubmittedAt, true) +
-                "Assistant" + new string('.', window.WaitingDots) + ": ", transcript.Text);
+                "Assistant: " + new string('.', window.WaitingDots) + "\r\n", transcript.Text);
             Assert.Equal(selected, transcript.Selection.Text);
             await window.SaveTranscriptAsync();
             Assert.Equal(TranscriptDisplay.Format(window.Turns, true, markGenerating: true), File.ReadAllText(export));
@@ -862,7 +868,7 @@ public class ChatTests
             Assert.Equal(expected, old.State);
             Assert.Equal(operation == "final" ? CleanResponse : "", old.Response);
             var transcript = (TranscriptView)window.FindName("Transcript");
-            Assert.DoesNotContain("Assistant.", transcript.Text);
+            Assert.DoesNotContain("Assistant: .", transcript.Text);
             if (operation == "clear") Assert.Empty(transcript.Text);
             window.AdvanceWaitingIndicator(old);
             Assert.Equal(0, window.WaitingDots);

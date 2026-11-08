@@ -61,7 +61,7 @@ for multiline text. SEND is disabled while unavailable or busy. Only one turn
 runs at a time, and input is retained until successful completion.
 
 While waiting for the assistant's first text, its heading cycles from
-`Assistant.: ` through `Assistant.....: ` every half-second, then restarts.
+`Assistant: .` through `Assistant: .....` every half-second, then restarts.
 The dots disappear on the first text (including whitespace), even if the
 response is still streaming. Stop, failure, Clear Window and Exit also remove
 them. They are temporary display state, never response text or saved transcript

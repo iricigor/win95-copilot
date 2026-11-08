@@ -323,11 +323,12 @@ function Submit([string] $Text, [string] $Mode = 'Button') {
 }
 function Latest-AssistantText {
     $text=Transcript
-    $headings=[regex]::Matches($text,'(?m)^Assistant(\.*): ')
+    $headings=[regex]::Matches($text,'(?m)^Assistant: ')
     if ($headings.Count -eq 0) { return '' }
     $last=$headings[$headings.Count-1]
-    if ($last.Groups[1].Length -ne 0) { return '' }
-    return $text.Substring($last.Index+$last.Length)
+    $response=$text.Substring($last.Index+$last.Length)
+    if ($response.Trim() -match '^\.{1,5}$') { return '' }
+    return $response
 }
 
 try {
@@ -456,7 +457,7 @@ try {
     $observed=New-Object 'System.Collections.Generic.List[int]'
     $cadence=[Diagnostics.Stopwatch]::StartNew()
     foreach($dots in @(1,2,3,4,5,1,2)) {
-        $heading='Assistant'+('.' * $dots)+': '
+        $heading='Assistant: '+('.' * $dots)
         Wait-For { (Transcript).EndsWith($heading) -or (Transcript).EndsWith($heading+"`r`n") } "waiting heading $dots dots" 2
         $observed.Add($dots)
         Assert-True ($textPattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'Waiting tick moved message selection.'
@@ -468,7 +469,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $script:data 'work\chat.first'),'continue')
     Wait-For { (Transcript).EndsWith('Assistant: first ') -or (Transcript).EndsWith("Assistant: first `r`n") } 'first text removed waiting dots before completion'
     Start-Sleep -Milliseconds 650
-    Assert-True ((Transcript) -notmatch 'Assistant\.+: ') 'Waiting animation restarted during a streamed-text pause.'
+    Assert-True ((Transcript) -notmatch 'Assistant: \.{1,5}(?:\r?\n|$)') 'Waiting animation restarted during a streamed-text pause.'
     Assert-True ($textPattern.GetSelection()[0].GetText(-1) -eq 'synthetic first') 'First text moved earlier message selection.'
     Assert-True ($scroll.Current.VerticalScrollPercent -lt 10) 'First text forced scroll-away to bottom.'
     Assert-True ((Requests).Count -eq $before+1) 'Waiting animation submitted another backend request.'
@@ -482,7 +483,7 @@ try {
     Invoke-Element (By-Id 'StopButton')
     Wait-For { (Transcript).Contains('[Cancelled]') } 'cancel marker'
     Assert-True ((Get-Value (By-Id 'PromptInput')) -eq 'synthetic stop') 'Cancelled input was lost.'
-    Assert-True ((Transcript) -notmatch 'Assistant\.+: ') 'Stop retained waiting dots.'
+    Assert-True ((Transcript) -notmatch 'Assistant: \.{1,5}(?:\r?\n|$)') 'Stop retained waiting dots.'
     Record 'actual Stop before first text, removed waiting dots/cancelled marker/retained input/owned subprocess settlement'
     Scenario 'partial-failure'
     Submit 'synthetic failure'
