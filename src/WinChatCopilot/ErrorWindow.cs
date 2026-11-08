@@ -27,6 +27,7 @@ public sealed class ErrorWindow : RetroWindow
             Content = "_OK", Width = 80, IsDefault = true, IsCancel = true,
             Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Center
         };
+        ButtonIcon.SetSource(ok, (System.Windows.Media.ImageSource)Resources["ConfirmIcon"]);
         ok.Click += (_, _) => DialogResult = true;
         panel.Children.Add(ok);
         Content = panel;

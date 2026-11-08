@@ -22,8 +22,10 @@
                        AutomationProperties.LiveSetting="Polite" />
         </ScrollViewer>
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="OkButton" Content="_OK" Width="80" IsDefault="True" Click="SaveClicked" />
-            <Button x:Name="CancelButton" Content="_Cancel" Width="80" Margin="8,0,0,0" IsCancel="True" />
+            <Button x:Name="OkButton" Content="_OK" local:ButtonIcon.Source="{StaticResource ConfirmIcon}"
+                    Width="80" IsDefault="True" Click="SaveClicked" />
+            <Button x:Name="CancelButton" Content="_Cancel" local:ButtonIcon.Source="{StaticResource CancelIcon}"
+                    MinWidth="80" Margin="8,0,0,0" IsCancel="True" />
         </StackPanel>
     </Grid>
 </local:RetroWindow>

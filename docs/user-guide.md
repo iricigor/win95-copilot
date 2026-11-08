@@ -110,6 +110,12 @@ Help/About shows the application version. The left system box provides normal
 window actions; title controls minimize/maximize/restore, without a modern X.
 File Exit, system Close, system-box double-click and Alt+F4 settle owned work.
 
+Main-window and dialog action buttons supplement their text with small original
+retro icons (plug, sliders, question mark, envelope, stop sign, folder, check and
+cross). Labels, keyboard access keys, default Enter/Escape, accessible action
+names and beveled focus/pressed cues remain intact. Disabled icons are faded;
+icons are decorative, not separate keyboard or screen-reader actions.
+
 ## Local data and limitations
 
 Preferences normally live at `%LOCALAPPDATA%\WinChatCopilot\settings.json`,
